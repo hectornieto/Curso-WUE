@@ -1,0 +1,22 @@
+name: curso_wue
+channels:
+    - conda-forge
+dependencies:
+    - python=3
+    - pip
+    - gdal
+    - numpy
+    - scipy
+    - pandas
+    - jupyter
+    - notebook
+    - bokeh
+    - netCDF4
+    - scikit-learn
+    - SALib
+    - matplotlib
+    - cdsapi
+    - pip:
+        - git+https://github.com/hectornieto/pypro4sail
+        - git+https://github.com/hectornieto/pyTSEB
+        - git+https://github.com/radosuav/pyDMS
