@@ -382,12 +382,14 @@ class ProSailSensitivity(object):
 def update_prospect_spectrum(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm):
     wls, rho, tau = pro.prospectd(N_leaf, Cab, Car, Cbrown, Cw, Cm, Ant)
     plot_spectrum(wls, rho, tau=tau)
+    return wls, rho, tau
 
 
 def update_soil_spectrum(soil_name):
     soil_file = "jhu.becknic.soil.%s.spectrum.txt"%soil_name
     rsoil = np.genfromtxt(os.path.join(SOIL_FOLDER, soil_file))
     plot_spectrum(rsoil[:, 0], rsoil[:, 1])
+    return rsoil[:, 0], rsoil[:, 1]
 
 
 def update_prosail_spectrum(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
@@ -426,6 +428,39 @@ def update_prosail_spectrum(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
                         rsoil)
     r2 = rdot * skyl + rsot * (1 - skyl)
     plot_spectrum(wls, r2)
+    return wls, r2
+
+def update_4sail_spectrum(lai, hotspot, leaf_angle, sza, vza, psi, skyl,
+                          rho_leaf, tau_leaf, rho_soil,
+                          wls=np.arange(400, 2501)):
+    lidf = sail.calc_lidf_campbell_vec(leaf_angle)
+
+    [_,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     rdot,
+     _,
+     _,
+     rsot,
+     _,
+     _,
+     _] = sail.foursail(lai, hotspot, lidf, sza, vza, psi, rho_leaf, tau_leaf,
+                        rho_soil)
+    r2 = rdot * skyl + rsot * (1 - skyl)
+    plot_spectrum(wls, r2)
+    return wls, r2
+
 
 def plot_spectrum(wls, rho, tau=None):
     plt.figure(figsize = (12.0, 6.0))
@@ -437,7 +472,7 @@ def plot_spectrum(wls, rho, tau=None):
     plt.xlim((np.min(wls), np.max(wls)))
     plt.xlabel('Wavelength (nm)')
     plt.tight_layout()
-    plt.show()
+    # plt.show()
 
 
 def plot_sensitivity(wls, rhos, param_name, param_values, taus=None):
