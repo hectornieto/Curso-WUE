@@ -472,14 +472,14 @@ def plot_spectrum(wls, rho, tau=None):
         plt.plot(wls, 1. - tau, "b")
     plt.ylabel('Reflectance')
     plt.ylim((0, 1))
-    plt.xlim((np.min(wls), np.max(wls)))
+    plt.xlim((400, 2500))
     plt.xlabel('Wavelength (nm)')
     plt.tight_layout()
     plt.show()
 
 
 def plot_sensitivity(wls, rhos, param_name, param_values, taus=None):
-    plt.figure(figsize = (12.0, 6.0))
+    plt.figure(figsize=(12.0, 6.0))
     colors = plt.cm.RdYlGn(np.linspace(0, 1, param_values.shape[0]))
     for i, value in enumerate(param_values):
         plt.plot(wls, rhos[i], color=colors[i], label=np.round(value, 3))
@@ -490,7 +490,7 @@ def plot_sensitivity(wls, rhos, param_name, param_values, taus=None):
     plt.ylabel('Reflectance')
     plt.ylim((0, 1))
     plt.xlabel('Wavelength (nm)')
-    plt.xlim((np.min(wls), np.max(wls)))
+    plt.xlim((400, 2500))
     plt.tight_layout()
     plt.show()
 
@@ -561,4 +561,33 @@ def prosail_sensitivity(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
     r2[bare, :] = rsoil[:, 1]
     plot_sensitivity(wls, r2, var, params[var])
     return wls, r2
+
+def sensor_sensitivity(sensor, spectra):
+
+    srf_file = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                            "input", "sensor_response_functions", sensor + ".txt")
+    srfs = np.genfromtxt(srf_file, dtype=None, names=True)
+    srf = []
+    wls = srfs["SR_WL"]
+    rho_full = spectra.result[1]
+    rho_sensor = []
+    wls_sensor = []
+    plt.figure(figsize=(12.0, 6.0))
+    for band in srfs.dtype.names[1:]:
+        wls_sensor.append(np.sum(wls * srfs[band]) / np.sum(srfs[band]))
+        rho_sensor.append(np.sum(rho_full * srfs[band], axis=1) / np.sum(srfs[band]))
+        valid = srfs[band] > 0
+        plt.plot(wls[valid], srfs[band][valid], label=band)
+
+    plt.legend(title="%s bands"%sensor, loc="upper right")
+    plt.ylabel('Spectral Response')
+    plt.ylim((0, 1))
+    plt.xlabel('Wavelength (nm)')
+    plt.xlim((400, 2501))
+    plt.tight_layout()
+    rho_sensor = np.asarray(rho_sensor).T
+    wls_sensor = np.asarray(wls_sensor)
+    val_range = np.linspace(*spectra.children[-2].value, N_STEPS)
+    plot_sensitivity(wls_sensor, rho_sensor, spectra.children[-3].value, val_range)
+
 
