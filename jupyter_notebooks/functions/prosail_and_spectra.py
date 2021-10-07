@@ -430,9 +430,10 @@ def update_prosail_spectrum(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
     plot_spectrum(wls, r2)
     return wls, r2
 
+
 def update_4sail_spectrum(lai, hotspot, leaf_angle, sza, vza, psi, skyl,
                           leaf_spectrum, soil_spectrum):
-    
+
     wls, rho_leaf, tau_leaf = leaf_spectrum.result
     rho_soil = soil_spectrum.result[1]
     lidf = sail.calc_lidf_campbell_vec(leaf_angle)
@@ -492,4 +493,72 @@ def plot_sensitivity(wls, rhos, param_name, param_values, taus=None):
     plt.xlim((np.min(wls), np.max(wls)))
     plt.tight_layout()
     plt.show()
+
+
+def prosail_sensitivity(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
+                        lai, hotspot, leaf_angle, sza, vza, psi, skyl,
+                        soil, var, value_range):
+    params = {"N_leaf": N_leaf, "Cab": Cab, "Car": Car, "Cbrown": Cbrown,
+              "Cw": Cw, "Cm": Cm, "Ant": Ant,
+              "leaf_angle": leaf_angle, "LAI": lai, "hotspot": hotspot,
+              "SZA": sza, "VZA": vza, "PSI": psi, "skyl": skyl}
+
+    # Replace the given value
+    for key, val in params.items():
+        if key == var:
+            params[key] = np.linspace(*value_range, N_STEPS)
+        elif key == "soil":
+            pass
+        else:
+            params[key] = np.full(N_STEPS, params[key])
+
+    wls, rho_leaf, tau_leaf = pro.prospectd_vec(params["N_leaf"],
+                                                params["Cab"],
+                                                params["Car"],
+                                                params["Cbrown"],
+                                                params["Cw"],
+                                                params["Cm"],
+                                                params["Ant"])
+
+    lidf = sail.calc_lidf_campbell_vec(params["leaf_angle"])
+    soil_file = "jhu.becknic.soil.%s.spectrum.txt"%soil
+    rsoil = np.genfromtxt(os.path.join(SOIL_FOLDER, soil_file))
+    # wl_soil=rsoil[:,0]
+    rsoil_vec = np.tile(np.array(rsoil[:, 1]), (N_STEPS, 1))
+
+    [_,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     _,
+     rdot,
+     _,
+     _,
+     rsot,
+     _,
+     _,
+     _] = sail.foursail_vec(params["LAI"],
+                            params["hotspot"],
+                            lidf,
+                            params["SZA"],
+                            params["VZA"],
+                            params["PSI"],
+                            rho_leaf.T,
+                            tau_leaf.T,
+                            rsoil_vec.T)
+    r2 = rdot * params["skyl"] + rsot * (1 - params["skyl"])
+    r2 = r2.T
+    bare = params["LAI"] == 0
+    r2[bare, :] = rsoil[:, 1]
+    plot_sensitivity(wls, r2, var, params[var])
+    return wls, r2
 
