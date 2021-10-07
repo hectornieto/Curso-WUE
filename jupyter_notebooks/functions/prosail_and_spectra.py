@@ -431,8 +431,10 @@ def update_prosail_spectrum(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
     return wls, r2
 
 def update_4sail_spectrum(lai, hotspot, leaf_angle, sza, vza, psi, skyl,
-                          rho_leaf, tau_leaf, rho_soil,
-                          wls=np.arange(400, 2501)):
+                          leaf_spectrum, soil_spectrum):
+    
+    wls, rho_leaf, tau_leaf = leaf_spectrum.result
+    rho_soil = soil_spectrum.result[1]
     lidf = sail.calc_lidf_campbell_vec(leaf_angle)
 
     [_,
@@ -472,7 +474,7 @@ def plot_spectrum(wls, rho, tau=None):
     plt.xlim((np.min(wls), np.max(wls)))
     plt.xlabel('Wavelength (nm)')
     plt.tight_layout()
-    # plt.show()
+    plt.show()
 
 
 def plot_sensitivity(wls, rhos, param_name, param_values, taus=None):
