@@ -1,11 +1,12 @@
+import os
+from glob import glob
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pypro4sail import pypro4sail as fs
 from pypro4sail import machine_learning_regression as inv
 from pypro4sail import four_sail as sail
 from pypro4sail import prospect as pro
-import numpy as np
-import os
-from glob import glob
 import ipywidgets as w
 from IPython.display import display, clear_output
 print("Gracias! librerías correctamente importadas")
@@ -13,10 +14,10 @@ print("Puedes continuar con las siguientes tareas")
 
 slide_kwargs = {"continuous_update": False}
 
-
 # Generate the list with VZAs (from 0 to 89)
 VZAS = np.arange(0, 99)
 INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "input")
+OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
 SOIL_FOLDER = os.path.join(INPUT_FOLDER, "soil_spectral_library")
 SRF_FOLDER = os.path.join(INPUT_FOLDER, "sensor_response_functions")
 
@@ -47,15 +48,15 @@ RANGE_DICT = {"N_leaf": (inv.MIN_N_LEAF, inv.MAX_N_LEAF),
               "leaf_angle": (inv.MIN_LEAF_ANGLE, inv.MAX_LEAF_ANGLE),
               "hotspot": (0, 1),
               "SZA": (0, 89),
-              "PSI": (0, 90),
+              "PSI": (0, 180),
               "VZA": (0, 89),
               "skyl": (0, 1)}
 
 N_STEPS = 10
 
 soil_files = sorted(glob(os.path.join(SOIL_FOLDER, "*.txt")))
-soil_types = np.asarray([os.path.splitext(os.path.basename(i))[0]
-                         for i in soil_files])
+soil_types = [os.path.splitext(os.path.basename(i))[0]
+                         for i in soil_files]
 
 w_nleaf = w.FloatSlider(value=inv.MEAN_N_LEAF,
                         min=inv.MIN_N_LEAF,
@@ -123,6 +124,39 @@ srf_list = sorted(glob(os.path.join(SRF_FOLDER, "*.txt")))
 sensor_list = [os.path.splitext(os.path.basename(i))[0] for i in srf_list]
 w_sensor = w.Dropdown(options=sensor_list, value=sensor_list[0],
                       description='Sensor')
+
+# Widgets for LUT building
+w_sims = w.IntSlider(value=5000, min=1000, max=100000, step=100,
+                     description="Simulaciones")
+
+w_range_params = {}
+for var, range in RANGE_DICT.items():
+    w_range_params[var] = w.FloatRangeSlider(value=range,
+                                 min=range[0],
+                                 max=range[1],
+                                 step=0.1,
+                                 description=var,
+                                 **slide_kwargs)
+    if var == "Cw" or var == "Cm":
+        w_range_params[var].readout_format = '.3f'
+        w_range_params[var].step = 0.001
+    else:
+        w_range_params[var].readout_format = '.1f'
+        w_range_params[var].step = 0.1
+
+w_range_car = w.FloatRangeSlider(value=RANGE_DICT["Car"],
+                                 min=RANGE_DICT["Car"][0],
+                                 max=RANGE_DICT["Car"][1],
+                                 step=0.1,
+                                 description="Car",
+                                 readout_format = '.1f',
+                                 **slide_kwargs)
+
+w_soils = w.SelectMultiple(options=soil_types,
+                           value=soil_types,
+                           description='Suelos',
+                           rows=20)
+
 
 def _on_param_change(args):
     var = args["new"]
@@ -630,8 +664,7 @@ def prosail_sensitivity(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
 
 def sensor_sensitivity(sensor, spectra):
 
-    srf_file = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                            "input", "sensor_response_functions", sensor + ".txt")
+    srf_file = os.path.join(SRF_FOLDER, sensor + ".txt")
     srfs = np.genfromtxt(srf_file, dtype=None, names=True)
     srf = []
     wls = srfs["SR_WL"]
@@ -655,5 +688,91 @@ def sensor_sensitivity(sensor, spectra):
     wls_sensor = np.asarray(wls_sensor)
     val_range = np.linspace(*spectra.children[-2].value, N_STEPS)
     plot_sensitivity(wls_sensor, rho_sensor, spectra.children[-3].value, val_range)
+
+def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_range,
+                             cbrown_range, cw_range, cm_range,
+                             lai_range, hotspot_range, leaf_angle_range,
+                             sza_range, vza_range, psi_range, skyl_range,
+                             soil_names, sensor):
+    print(car_range)
+    param_bounds = {"N_leaf": n_leaf_range, "Cab": cab_range, "Car": car_range,
+                    "Ant": ant_range, "Cbrown": cbrown_range, "Cw": cw_range,
+                    "Cm": cm_range, "LAI": lai_range, "leaf_angle": leaf_angle_range,
+                    "hotspot": hotspot_range, "SZA": sza_range, "VZA": vza_range,
+                    "PSI": psi_range, "skyl": skyl_range}
+
+    distribution = inv.SALTELLI_DIST
+
+    params_orig = inv.build_prosail_database(n_sim,
+                                             param_bounds=param_bounds,
+                                             distribution=distribution)
+    print('Builing standard soil database')
+    soil_files = [os.path.join(SOIL_FOLDER, '%s.txt'%i) for i in soil_names]
+    n_soils = len(soil_files)
+    soil_spectrum = []
+    for soil_file in soil_files:
+        r = np.genfromtxt(soil_file)
+        soil_spectrum.append(r[:, 1])
+
+    n_simulations = params_orig["LAI"].size
+    multiplier = int(np.ceil(float(n_simulations / n_soils)))
+    soil_spectrum = np.asarray(soil_spectrum * multiplier)
+    soil_spectrum = soil_spectrum[:n_simulations]
+    soil_spectrum = soil_spectrum.T
+
+    print('Getting Spectral Response Function')
+    srf_file = os.path.join(SRF_FOLDER, sensor + ".txt")
+    srfs = np.genfromtxt(srf_file, dtype=None, names=True)
+    srf = []
+    band_names = []
+    wls_sensor = []
+    wls = np.arange(400, 2501)
+    for band in srfs.dtype.names[1:]:
+        srf.append(srfs[band])
+        band_names.append(band)
+        wls_sensor.append(np.sum(wls * srfs[band]) / np.sum(srfs[band]))
+
+    skyl = np.tile(params_orig["skyl"], (2101, 1))
+    print('Building ProspectD+4SAIL database with %i simulations\n'
+          'This could take some time...'%n_simulations)
+    rho_canopy_vec, params = inv.simulate_prosail_lut(params_orig,
+                                                      wls,
+                                                      soil_spectrum,
+                                                      srf=srf,
+                                                      skyl=skyl,
+                                                      sza=params_orig["SZA"],
+                                                      vza=params_orig["VZA"],
+                                                      psi=params_orig["PSI"],
+                                                      calc_FAPAR=True,
+                                                      reduce_4sail=True)
+
+    rho_canopy_vec = pd.DataFrame(rho_canopy_vec, columns=band_names)
+    params = pd.DataFrame(params)
+    result = pd.concat([params, rho_canopy_vec], axis=1)
+    del params, rho_canopy_vec
+    out_file = os.path.join(OUTPUT_FOLDER, "prosail_simulations.csv")
+    if not os.path.isdir(OUTPUT_FOLDER):
+        os.path.makedirs(OUTPUT_FOLDER)
+    result.to_csv(out_file)
+    print('Simulations saved in %s'%out_file)
+    print("Plotting NDVI vs. LAI")
+    red = find_band_pos(band_names, wls_sensor, 650)
+    nir = find_band_pos(band_names, wls_sensor, 850)
+    ndvi = (result[nir] - result[red]) / (result[nir] + result[red])
+    plt.figure(figsize=(12.0, 6.0))
+    plt.scatter(result["LAI"], ndvi, c="blue", s=3, alpha=0.5)
+    plt.ylabel('%s NDVI' % sensor)
+    plt.ylim((0, 1))
+    plt.xlabel('LAI')
+    plt.xlim(lai_range)
+    plt.tight_layout()
+    plt.show()
+
+
+def find_band_pos(band_names, wls_sensor, wl):
+    diff = np.abs(np.asarray(wls_sensor) - wl)
+    min_diff = np.min(diff)
+    pos = int(np.where(diff == min_diff)[0])
+    return band_names[pos]
 
 
