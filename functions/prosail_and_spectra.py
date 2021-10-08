@@ -5,15 +5,20 @@ from pypro4sail import four_sail as sail
 from pypro4sail import prospect as pro
 import numpy as np
 import os
-import ipywidgets as widgets
+from glob import glob
+import ipywidgets as w
 from IPython.display import display, clear_output
 print("Gracias! librerías correctamente importadas")
 print("Puedes continuar con las siguientes tareas")
 
+slide_kwargs = {"continuous_update": False}
+
+
 # Generate the list with VZAs (from 0 to 89)
 VZAS = np.arange(0, 99)
-SOIL_FOLDER = os.path.join(os.path.dirname(fs.__file__),
-                           "spectra", "soil_spectral_library")
+INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "input")
+SOIL_FOLDER = os.path.join(INPUT_FOLDER, "soil_spectral_library")
+SRF_FOLDER = os.path.join(INPUT_FOLDER, "sensor_response_functions")
 
 PARAM_DICT = {"N_leaf": inv.MEAN_N_LEAF,
               "Cab": inv.MEAN_CAB,
@@ -48,35 +53,96 @@ RANGE_DICT = {"N_leaf": (inv.MIN_N_LEAF, inv.MAX_N_LEAF),
 
 N_STEPS = 10
 
-SOIL_TYPES = ["alfisol.fragiboralf.coarse.86P1994",
-               "alfisol.haploxeralf.coarse.87P313",
-               "alfisol.haplustalf.coarse.87P3671",
-               "alfisol.paleustalf.coarse.87P2410",
-               "aridisol.calciorthid.coarse.79P1536",
-               "aridisol.camborthid.coarse.87P337",
-               "aridisol.gypsiorthid.coarse.82P2695",
-               "aridisol.haplargid.coarse.89P1793",
-               "aridisol.salorthid.coarse.79P1530",
-               "aridisol.torripsamment.coarse.90P0142",
-               "entisol.quartzipsamment.coarse.87P706",
-               "entisol.torripsamment.coarse.0015",
-               "entisol.ustifluvent.coarse.82P2230",
-               "inceptisol.cryumbrept.coarse.87P3855",
-               "inceptisol.dystrochrept.coarse.88P2535",
-               "inceptisol.haplumbrept.coarse.86P4561",
-               "inceptisol.plaggept.coarse.85P3707",
-               "inceptisol.xerumbrept.coarse.87P325",
-               "mollisol.agialboll.coarse.85P5339",
-               "mollisol.agriudoll.coarse.87P757",
-               "mollisol.argiustoll.coarse.90P128s",
-               "mollisol.cryoboroll.coarse.85P4663",
-               "mollisol.haplaquoll.coarse.86P4603",
-               "mollisol.hapludoll.coarse.87P764",
-               "mollisol.haplustall.coarse.85P4569",
-               "mollisol.paleustoll.coarse.90P186s",
-               "spodosol.cryohumod.coarse.87P4264",
-               "utisol.hapludult.coarse.87P707",
-               "vertisol.chromoxerert.coarse.88P475"]
+soil_files = sorted(glob(os.path.join(SOIL_FOLDER, "*.txt")))
+soil_types = np.asarray([os.path.splitext(os.path.basename(i))[0]
+                         for i in soil_files])
+
+w_nleaf = w.FloatSlider(value=inv.MEAN_N_LEAF,
+                        min=inv.MIN_N_LEAF,
+                        max=inv.MAX_N_LEAF,
+                        step=0.01, description='N:', **slide_kwargs)
+w_cab = w.FloatSlider(value=inv.MEAN_CAB,
+                      min=inv.MIN_CAB,
+                      max=inv.MAX_CAB,
+                      step=1, description='Cab ($\mu$g/cm²):', **slide_kwargs)
+w_car = w.FloatSlider(value=inv.MEAN_CAR,
+                      min=inv.MIN_CAR,
+                      max=inv.MAX_CAR,
+                      step=1, description='Car ($\mu$g/cm²):', **slide_kwargs)
+w_ant = w.FloatSlider(value=inv.MEAN_ANT,
+                      min=inv.MIN_ANT,
+                      max=inv.MAX_ANT,
+                      step=1, description='Ant ($\mu$g/cm²):', **slide_kwargs)
+w_cbrown = w.FloatSlider(value=inv.MEAN_CBROWN,
+                         min=inv.MIN_CBROWN,
+                         max=inv.MAX_CBROWN,
+                         step=0.05, description='Cbrown (-):', **slide_kwargs)
+w_cw = w.FloatSlider(value=inv.MEAN_CW,
+                     min=inv.MIN_CW,
+                     max=inv.MAX_CW,
+                     step=0.001, description='Cw (g/cm²):',
+                     readout_format='.3f', **slide_kwargs)
+w_cm = w.FloatSlider(value=inv.MEAN_CM,
+                     min=inv.MIN_CM,
+                     max=inv.MAX_CM,
+                     step=0.001, description='Cm (g/cm²):',
+                     readout_format='.3f', **slide_kwargs)
+
+w_soil = w.Dropdown(options=soil_types, value=soil_types[0], description='Soil Type')
+
+w_lai = w.FloatSlider(value=inv.MEAN_LAI,
+                      min=inv.MIN_LAI,
+                      max=inv.MAX_LAI,
+                      step=0.1, description='LAI (m²/m²):', **slide_kwargs)
+w_hotspot = w.FloatSlider(value=inv.MEAN_HOTSPOT,
+                          min=inv.MIN_HOTSPOT,
+                          max=inv.MAX_HOTSPOT,
+                          step=0.01, description='hotspot (-):', **slide_kwargs)
+w_leaf_angle = w.FloatSlider(value=inv.MEAN_LEAF_ANGLE,
+                             min=inv.MIN_LEAF_ANGLE,
+                             max=inv.MAX_LEAF_ANGLE,
+                             step=1, description='Leaf Angle (deg.):',
+                             **slide_kwargs)
+w_sza = w.FloatSlider(value=35., min=0, max=89, step=1,
+                      description='SZA (deg.):', **slide_kwargs)
+w_vza = w.FloatSlider(value=0, min=0, max=89, step=1,
+                      description='VZA (deg.):', **slide_kwargs)
+w_psi = w.FloatSlider(value=0, min=0, max=180, step=1,
+                      description='PSI (deg.):', **slide_kwargs)
+w_skyl = w.FloatSlider(value=0.1, min=0, max=1, step=0.01,
+                       description='skyl (-):', **slide_kwargs)
+w_param = w.Dropdown(options=RANGE_DICT.keys(), value="LAI",
+                     description='Variable a evaluar')
+w_range = w.FloatRangeSlider(value=RANGE_DICT["LAI"],
+                             min=RANGE_DICT["LAI"][0],
+                             max=RANGE_DICT["LAI"][1],
+                             description="Rango", readout_format='.1f',
+                             **slide_kwargs)
+
+srf_list = sorted(glob(os.path.join(SRF_FOLDER, "*.txt")))
+sensor_list = [os.path.splitext(os.path.basename(i))[0] for i in srf_list]
+w_sensor = w.Dropdown(options=sensor_list, value=sensor_list[0],
+                      description='Sensor')
+
+def _on_param_change(args):
+    var = args["new"]
+    if var == "Cm" or var == "Cw":
+        w_range.readout_format = '.3f'
+        w_range.step = 0.001
+    else:
+        w_range.readout_format = '.1f'
+        w_range.step = 0.1
+
+    if RANGE_DICT[var][1] < w_range.min:
+        w_range.min = RANGE_DICT[var][0]
+        w_range.max = RANGE_DICT[var][1]
+    else:
+        w_range.max = RANGE_DICT[var][1]
+        w_range.min = RANGE_DICT[var][0]
+    w_range.value = RANGE_DICT[var]
+
+
+w_param.observe(_on_param_change, 'value', type="change")
 
 class ProSailSensitivity(object):
 
@@ -182,8 +248,8 @@ class ProSailSensitivity(object):
             layout=self.widget_layout)
 
         self.w_soil = widgets.Dropdown(
-            options=SOIL_TYPES,
-            value=SOIL_TYPES[0],
+            options=soil_types,
+            value=soil_types[0],
             description='Soil Type',
             style=self.widget_style,
             layout=self.widget_layout)
@@ -358,7 +424,7 @@ class ProSailSensitivity(object):
         self.w_range.value = RANGE_DICT[args["new"]]
 
     def _on_soil_change(self, args):
-        soil_file = "jhu.becknic.soil.%s.spectrum.txt"%args["new"]
+        soil_file = "%s.txt"%args["new"]
         self.params["soil"] = soil_file
 
 
@@ -386,7 +452,7 @@ def update_prospect_spectrum(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm):
 
 
 def update_soil_spectrum(soil_name):
-    soil_file = "jhu.becknic.soil.%s.spectrum.txt"%soil_name
+    soil_file = "%s.txt"%soil_name
     rsoil = np.genfromtxt(os.path.join(SOIL_FOLDER, soil_file))
     plot_spectrum(rsoil[:, 0], rsoil[:, 1])
     return rsoil[:, 0], rsoil[:, 1]
@@ -397,7 +463,7 @@ def update_prosail_spectrum(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
                             sza, vza, psi, skyl,
                             soil_name):
     # Replace the given value
-    soil_file = "jhu.becknic.soil.%s.spectrum.txt"%soil_name
+    soil_file = "%s.txt"%soil_name
     wls, rho_leaf, tau_leaf = pro.prospectd(N_leaf, Cab, Car, Cbrown,
                                             Cw, Cm, Ant)
     rsoil = np.genfromtxt(os.path.join(SOIL_FOLDER, soil_file))
@@ -497,7 +563,7 @@ def plot_sensitivity(wls, rhos, param_name, param_values, taus=None):
 
 def prosail_sensitivity(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
                         lai, hotspot, leaf_angle, sza, vza, psi, skyl,
-                        soil, var, value_range):
+                        soil_name, var, value_range):
     params = {"N_leaf": N_leaf, "Cab": Cab, "Car": Car, "Cbrown": Cbrown,
               "Cw": Cw, "Cm": Cm, "Ant": Ant,
               "leaf_angle": leaf_angle, "LAI": lai, "hotspot": hotspot,
@@ -521,7 +587,7 @@ def prosail_sensitivity(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm,
                                                 params["Ant"])
 
     lidf = sail.calc_lidf_campbell_vec(params["leaf_angle"])
-    soil_file = "jhu.becknic.soil.%s.spectrum.txt"%soil
+    soil_file = "%s.txt"%soil_name
     rsoil = np.genfromtxt(os.path.join(SOIL_FOLDER, soil_file))
     # wl_soil=rsoil[:,0]
     rsoil_vec = np.tile(np.array(rsoil[:, 1]), (N_STEPS, 1))
