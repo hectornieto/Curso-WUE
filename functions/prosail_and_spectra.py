@@ -743,7 +743,7 @@ def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_rang
                                                       sza=params_orig["SZA"],
                                                       vza=params_orig["VZA"],
                                                       psi=params_orig["PSI"],
-                                                      calc_FAPAR=True,
+                                                      calc_FAPAR=False,
                                                       reduce_4sail=True)
 
     rho_canopy_vec = pd.DataFrame(rho_canopy_vec, columns=band_names)
