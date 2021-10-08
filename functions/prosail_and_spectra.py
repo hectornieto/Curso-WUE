@@ -128,30 +128,83 @@ w_sensor = w.Dropdown(options=sensor_list, value=sensor_list[0],
 # Widgets for LUT building
 w_sims = w.IntSlider(value=5000, min=1000, max=100000, step=100,
                      description="Simulaciones")
-
-w_range_params = {}
-for var, range in RANGE_DICT.items():
-    w_range_params[var] = w.FloatRangeSlider(value=range,
-                                 min=range[0],
-                                 max=range[1],
+w_range_nleaf = w.FloatRangeSlider(value=RANGE_DICT["N_leaf"],
+                                 min=RANGE_DICT["N_leaf"][0],
+                                 max=RANGE_DICT["N_leaf"][1],
                                  step=0.1,
-                                 description=var,
+                                 description="N_leaf",
+                                 readout_format='.1f',
                                  **slide_kwargs)
-    if var == "Cw" or var == "Cm":
-        w_range_params[var].readout_format = '.3f'
-        w_range_params[var].step = 0.001
-    else:
-        w_range_params[var].readout_format = '.1f'
-        w_range_params[var].step = 0.1
-
+w_range_cab = w.FloatRangeSlider(value=RANGE_DICT["Cab"],
+                                 min=RANGE_DICT["Cab"][0],
+                                 max=RANGE_DICT["Cab"][1],
+                                 step=0.1,
+                                 description="Cabr",
+                                 readout_format='.1f',
+                                 **slide_kwargs)
 w_range_car = w.FloatRangeSlider(value=RANGE_DICT["Car"],
                                  min=RANGE_DICT["Car"][0],
                                  max=RANGE_DICT["Car"][1],
                                  step=0.1,
                                  description="Car",
-                                 readout_format = '.1f',
+                                 readout_format='.1f',
                                  **slide_kwargs)
-
+w_range_ant = w.FloatRangeSlider(value=RANGE_DICT["Ant"],
+                                 min=RANGE_DICT["Ant"][0],
+                                 max=RANGE_DICT["Ant"][1],
+                                 step=0.1,
+                                 description="Ant",
+                                 readout_format='.1f',
+                                 **slide_kwargs)
+w_range_cbrown = w.FloatRangeSlider(value=RANGE_DICT["Cbrown"],
+                                 min=RANGE_DICT["Cbrown"][0],
+                                 max=RANGE_DICT["Cbrown"][1],
+                                 step=0.1,
+                                 description="Cbrown",
+                                 readout_format='.1f',
+                                 **slide_kwargs)
+w_range_cbrown = w.FloatRangeSlider(value=RANGE_DICT["Cbrown"],
+                                 min=RANGE_DICT["Cbrown"][0],
+                                 max=RANGE_DICT["Cbrown"][1],
+                                 step=0.1,
+                                 description="Cbrown",
+                                 readout_format='.1f',
+                                 **slide_kwargs)
+w_range_cm = w.FloatRangeSlider(value=RANGE_DICT["Cm"],
+                                 min=RANGE_DICT["Cm"][0],
+                                 max=RANGE_DICT["Cm"][1],
+                                 step=0.001,
+                                 description="Cm",
+                                 readout_format= '.3f',
+                                 **slide_kwargs)
+w_range_cw = w.FloatRangeSlider(value=RANGE_DICT["Cw"],
+                                 min=RANGE_DICT["Cw"][0],
+                                 max=RANGE_DICT["Cw"][1],
+                                 step=0.001,
+                                 description="Cw",
+                                 readout_format= '.3f',
+                                 **slide_kwargs)
+w_range_lai = w.FloatRangeSlider(value=RANGE_DICT["LAI"],
+                                 min=RANGE_DICT["LAI"][0],
+                                 max=RANGE_DICT["LAI"][1],
+                                 step=0.1,
+                                 description="LAI",
+                                 readout_format= '.1f',
+                                 **slide_kwargs)
+w_range_leaf_angle = w.FloatRangeSlider(value=RANGE_DICT["leaf_angle"],
+                                 min=RANGE_DICT["leaf_angle"][0],
+                                 max=RANGE_DICT["leaf_angle"][1],
+                                 step=1,
+                                 description="Leaf Angle",
+                                 readout_format= '.0f',
+                                 **slide_kwargs)
+w_range_hotspot = w.FloatRangeSlider(value=RANGE_DICT["hotspot"],
+                                 min=RANGE_DICT["hotspot"][0],
+                                 max=RANGE_DICT["hotspot"][1],
+                                 step=0.01,
+                                 description="hotspot",
+                                 readout_format= '.2f',
+                                 **slide_kwargs)
 w_soils = w.SelectMultiple(options=soil_types,
                            value=soil_types,
                            description='Suelos',
@@ -466,17 +519,6 @@ class ProSailSensitivity(object):
         obj_param = self.w_obj_param.value
         wls, r2 = self.get_canopy_spectra()
         plot_sensitivity(wls, r2, obj_param, self.params[obj_param], taus=None)
-        # colors = plt.cm.RdYlGn(np.linspace(0, 1, self.params[obj_param].shape[0]))
-        # fig = plt.figure(figsize=(12.0, 6.0))
-        # ax = fig.add_subplot(1, 1, 1)
-        # for i, value in enumerate(self.params[obj_param]):
-        #     ax.plot(wls, r2[i], color=colors[i], label=np.round(value, 3))
-        #
-        # ax.legend(title=obj_param)
-        # ax.set_ylabel('Reflectance')
-        # ax.set_xlabel('Wavelenght (nm)')
-        # ax.set_xlim((np.min(wls), np.max(wls)))
-        # ax.set_ylim((0, 1))
 
 
 def update_prospect_spectrum(N_leaf, Cab, Car, Ant, Cbrown, Cw, Cm):
@@ -692,21 +734,20 @@ def sensor_sensitivity(sensor, spectra):
 def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_range,
                              cbrown_range, cw_range, cm_range,
                              lai_range, hotspot_range, leaf_angle_range,
-                             sza_range, vza_range, psi_range, skyl_range,
+                             sza, vza, psi, skyl,
                              soil_names, sensor):
-    print(car_range)
+
     param_bounds = {"N_leaf": n_leaf_range, "Cab": cab_range, "Car": car_range,
                     "Ant": ant_range, "Cbrown": cbrown_range, "Cw": cw_range,
                     "Cm": cm_range, "LAI": lai_range, "leaf_angle": leaf_angle_range,
-                    "hotspot": hotspot_range, "SZA": sza_range, "VZA": vza_range,
-                    "PSI": psi_range, "skyl": skyl_range}
+                    "hotspot": hotspot_range}
 
     distribution = inv.SALTELLI_DIST
 
     params_orig = inv.build_prosail_database(n_sim,
                                              param_bounds=param_bounds,
                                              distribution=distribution)
-    print('Builing standard soil database')
+
     soil_files = [os.path.join(SOIL_FOLDER, '%s.txt'%i) for i in soil_names]
     n_soils = len(soil_files)
     soil_spectrum = []
@@ -720,7 +761,6 @@ def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_rang
     soil_spectrum = soil_spectrum[:n_simulations]
     soil_spectrum = soil_spectrum.T
 
-    print('Getting Spectral Response Function')
     srf_file = os.path.join(SRF_FOLDER, sensor + ".txt")
     srfs = np.genfromtxt(srf_file, dtype=None, names=True)
     srf = []
@@ -732,17 +772,15 @@ def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_rang
         band_names.append(band)
         wls_sensor.append(np.sum(wls * srfs[band]) / np.sum(srfs[band]))
 
-    skyl = np.tile(params_orig["skyl"], (2101, 1))
-    print('Building ProspectD+4SAIL database with %i simulations\n'
-          'This could take some time...'%n_simulations)
+    print('Building ProspectD+4SAIL database... This could take some time')
     rho_canopy_vec, params = inv.simulate_prosail_lut(params_orig,
                                                       wls,
                                                       soil_spectrum,
                                                       srf=srf,
                                                       skyl=skyl,
-                                                      sza=params_orig["SZA"],
-                                                      vza=params_orig["VZA"],
-                                                      psi=params_orig["PSI"],
+                                                      sza=sza,
+                                                      vza=vza,
+                                                      psi=psi,
                                                       calc_FAPAR=False,
                                                       reduce_4sail=True)
 
@@ -755,17 +793,30 @@ def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_rang
         os.makedirs(OUTPUT_FOLDER)
     result.to_csv(out_file)
     print('Simulations saved in %s'%out_file)
-    print("Plotting NDVI vs. LAI")
+    print("Plotting VI's relationships")
     red = find_band_pos(band_names, wls_sensor, 650)
     nir = find_band_pos(band_names, wls_sensor, 850)
+    rededge = find_band_pos(band_names, wls_sensor, 715)
+    swir = find_band_pos(band_names, wls_sensor, 1600)
+
     ndvi = (result[nir] - result[red]) / (result[nir] + result[red])
-    plt.figure(figsize=(12.0, 6.0))
-    plt.scatter(result["LAI"], ndvi, c="blue", s=3, alpha=0.5)
-    plt.ylabel('%s NDVI' % sensor)
-    plt.ylim((0, 1))
-    plt.xlabel('LAI')
-    plt.xlim(lai_range)
-    plt.tight_layout()
+    ndre = (result[nir] - result[rededge]) / (result[nir] + result[rededge])
+    ndwi = (result[nir] - result[swir]) / (result[nir] + result[swir])
+
+    fig, axs = plt.subplots(ncols=3, figsize=(12.0, 6.0), sharey=True)
+    axs[0].scatter(result["LAI"], ndvi, c="blue", s=3, alpha=0.5)
+    axs[0].set_xlabel('LAI')
+    axs[0].set_title('NDVI')
+    axs[1].scatter(result["Cab"], ndre, c="blue", s=3, alpha=0.5)
+    axs[1].set_xlabel('C$_{a+b}$ ($\mu$g/cm²)')
+    axs[1].set_title('NDRE')
+    axs[2].scatter(result["Cw"], ndwi, c="blue", s=3, alpha=0.5)
+    axs[2].set_xlabel('C$_{w}$ (g/cm²)')
+    axs[2].set_title('NDWI')
+    axs[0].set_ylabel('Índice de Vegetación')
+    axs[0].set_ylim((0, 1))
+    fig.tight_layout()
+    plt.subplots_adjust(wspace=0)
     plt.show()
 
 
