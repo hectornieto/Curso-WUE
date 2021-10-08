@@ -752,7 +752,7 @@ def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_rang
     del params, rho_canopy_vec
     out_file = os.path.join(OUTPUT_FOLDER, "prosail_simulations.csv")
     if not os.path.isdir(OUTPUT_FOLDER):
-        os.path.makedirs(OUTPUT_FOLDER)
+        os.makedirs(OUTPUT_FOLDER)
     result.to_csv(out_file)
     print('Simulations saved in %s'%out_file)
     print("Plotting NDVI vs. LAI")
