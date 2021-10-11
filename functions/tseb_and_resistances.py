@@ -1,76 +1,230 @@
-import matplotlib.pyplot as plt
+import os
 from pyTSEB import TSEB
 from pyTSEB import MO_similarity as mo
 from pyTSEB import wind_profile as wind
 from pyTSEB import resistances as res
+from pyTSEB import energy_combination_ET as pet
+from pyTSEB import meteo_utils as met
+from pyTSEB import net_radiation as rad
+from pypro4sail import four_sail as fs
+from pypro4sail import machine_learning_regression as inv
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import pandas as pd
+import ipywidgets as w
+from IPython.display import display, clear_output
+print("Gracias! librerías correctamente importadas")
+print("Puedes continuar con las siguientes tareas")
+
+slide_kwargs = {"continuous_update": False}
+FIGSIZE = (12.0, 6.0)
+
+np.seterr(all="ignore")
 
 # Generate the list with VZAs (from 0 to 89)
-VZAS = np.arange(0, 90)
+INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "input")
+OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
+CIMIS_FILE_PATH = os.path.join(INPUT_FOLDER, "meteo", "cims_rip_daily.csv")
 
-def plot_fveg(lai, chi):
-    plt.rcParams['figure.figsize'] = (7.0, 5.0)
+N_SIM = 50
+LAIS = np.linspace(0, 6, N_SIM)
+pet.ITERATIONS = 5
+# Generate the list with VZAs (from 0 to 89)
+VZAS = np.arange(0, 89)
+DELTA_T_LIMS = -5, 20
+FLUX_LIMS = 0, 500
+ET_LIMS = 0, 10
+U = 5.  # set wind speed (measured at 10m above the canopy)
+Z_U = 10.
+Z_T = 10.
+LAI = 1.5
+H_C = 0.12  # Canopy height
+LEAF_WIDTH = 0.1  # Leaf width (m)
+# Create list of heights
+ZS = np.linspace(0, Z_U, N_SIM)
+US = np.linspace(0.50, 5, N_SIM)
+EMIS_C = 0.98
+EMIS_S = 0.05
+RES_FORM = [TSEB.KUSTAS_NORMAN_1999, {}]
+# mean stomatal resistance, rsT, is taken as 400sm-1.  It follows from Eq. (19)
+# that, for a leaf area index, L , of 4, the bulk stomatal resistance is 50 sm-1
+RST_MIN = 400
+# Calculations are carried out for the following meteorological conditions: R, =
+# 400 W m-2; D = 0,10,20 mb; T, = 25 “C; and u = 2ms-’. Such meteorological conditions
+# might be considered typical for midday in the middle of a growing season at a subtropical
+# site. However, the objective is not to make detailed predictions for particular meteoro-
+# logical conditions, it is rather to illustrate the general features of the theoretical treatment
+# described.
+SDN = 300.  # We assume sn=400 to try to approach rn=400 when computing ln in the module
+TAIR = 25 + 273.15  # K
+PRESS = 1013.  # mb
+VPD = 20.  # mb
+# For bare soil zb is commonly taken as 0.01 m (see Van Bavel and Hillel 1976)
+Z0_SOIL = 0.01
+
+CIMIS_DATA = pd.read_csv(CIMIS_FILE_PATH)
+CIMIS_DATA['Date'] = pd.to_datetime(CIMIS_DATA['Date'], format="%m/%d/%Y")
+CIMIS_DATA["VPD_mean"] = TSEB.met.calc_vapor_pressure(CIMIS_DATA["Avg Air Temp (C)"] + 273.15) \
+                            - 10 * CIMIS_DATA["Avg Vap Pres (kPa)"]
+
+w_lai = w.FloatSlider(value=LAI, min=0, max=10, step=0.1, description='LAI (m²/m²)',
+                      **slide_kwargs)
+
+w_leaf_angle = w.FloatSlider(value=57, min=1, max=90, step=1,
+                             description='Leaf Angle (deg.)', **slide_kwargs)
+
+w_zol = w.FloatSlider(min=-1, max=0, value=0, step=0.01, description='Estabilidad',
+                      **slide_kwargs)
+
+w_hc = w.FloatSlider(min=0.01, max=8, value=H_C, step=0.01, description='Altura dosel',
+                      **slide_kwargs)
+
+w_hb_ratio = w.FloatSlider(min=0.0, max=0.9, value=0.5, step=0.01,
+                           description='Inicio del dosel', **slide_kwargs)
+w_r_ss = w.FloatSlider(min=0, max=10000, value=2000, step=100,
+                       description='R$_{ss}$ (s/m)', **slide_kwargs)
+w_g_st = w.FloatSlider(min=0, max=0.5, value=0.12, step=0.001,
+                       description='g$_{st}$ (mmol/m²s¹)', **slide_kwargs)
+w_lai_range = w.FloatRangeSlider(min=0, max=10, value=[0, 4], step=0.1,
+                                 description='LAI', **slide_kwargs)
+w_vza = w.FloatSlider(min=0, max=89, value=0, step=1,
+                       description='VZA (deg.)', **slide_kwargs)
+w_ev = w.FloatSlider(min=0.97, max=1, value=0.99, step=0.001,
+                     description='$\epsilon_V$', readout_format='.3f',
+                     **slide_kwargs)
+w_es = w.FloatSlider(min=0.90, max=1, value=0.97, step=0.001,
+                     description='$\epsilon_S$', readout_format='.3f',
+                     **slide_kwargs)
+
+def plot_fveg(lai, leaf_angle=57):
+    chi = inv.alpha2x_LAD(leaf_angle)
     # Create an empty list with the returning f_c for each canopy
     fc = TSEB.calc_F_theta_campbell(VZAS, lai, x_LAD=chi)
     fc_sph = TSEB.calc_F_theta_campbell(VZAS, lai, x_LAD=1)
     # Plot the results
-    plt.plot(VZAS, fc, 'r')
-    plt.plot(VZAS, fc_sph, 'k--', label='Spherical')
-    plt.xlabel('VZA (degrees)')
-    plt.ylabel('$f_c$')
-    plt.ylim((0, 1.05))
-    plt.legend(loc='lower right')
+    fig, axs = plt.subplots(figsize=FIGSIZE)
+    axs.plot(VZAS, fc, 'r')
+    axs.plot(VZAS, fc_sph, 'k--', label='Spherical')
+    axs.set_xlabel('VZA (degrees)')
+    axs.set_ylabel('$f_c$')
+    axs.set_ylim((0, 1.05))
+    axs.set_xlim((0, 90))
+    axs.legend(loc='lower right')
+    plt.tight_layout()
+    plt.show()
+    return fc
 
 
-U = 1.  # set wind speed (measured at 10m above the canopy)
-Z_U = 2.
-H_C = 1.  # Canopy height
-LEAF_WIDTH = 0.1  # Leaf width (m)
-# Create list of heights
-ZS = np.linspace(0, Z_U, 100)
+def calc_roughness(h_c):
+    z_0m = h_c / 8.
+    d_0 = 2. * h_c / 3.
+    return z_0m, d_0
 
-def plot_profile(lai, l_mo):
-    def wind_profile(lai, l_mo=np.float('inf')):
-        # Estimate surface roughness
-        z_0m, d_0 = res.calc_roughness(lai, H_C)
-        # Calculate the friction velocity
-        u_friction = mo.calc_u_star(U, Z_U, l_mo, d_0, z_0m)
-        upper = ZS >= H_C
-        u_z = np.ones(ZS.shape)
-        u_c = wind.calc_u_C_star(u_friction, H_C, d_0, z_0m, l_mo)
-        u_z[upper] = wind.calc_u_C_star(u_friction, ZS[upper], d_0, z_0m, l_mo)
-        u_z[~upper] = wind.calc_u_Goudriaan(u_c, H_C, lai, LEAF_WIDTH, ZS[~upper])
 
-        return u_z, u_c
+def l_2_zol(z_0m, zol):
+    if zol == 0.0:
+        l_mo = np.inf
+    else:
+        l_mo = z_0m / zol
+    return l_mo
 
+
+def wind_profile(zol, lai, h_c=1):
+    # Estimate surface roughness
+    z_0m, d_0 = calc_roughness(h_c)
+    l_mo = l_2_zol(z_0m, zol)
+    # Calculate the friction velocity
+    u_friction = mo.calc_u_star(U, Z_U, l_mo, d_0, z_0m)
+    upper = ZS >= h_c
+    u_z = np.ones(ZS.shape)
+    u_c = wind.calc_u_C_star(u_friction, h_c, d_0, z_0m, l_mo)
+    u_z[upper] = wind.calc_u_C_star(u_friction, ZS[upper], d_0, z_0m, l_mo)
+    u_z[~upper] = wind.calc_u_Goudriaan(u_c, h_c, lai, LEAF_WIDTH, ZS[~upper])
+    plot_profile(u_z, u_c, h_c)
+    return u_z, u_c
+
+
+def wind_profile_heterogeneous(zol, lai, h_c=1, hb_ratio=0.5):
+    # Estimate surface roughness
+    z_0m, d_0 = calc_roughness(h_c)
+    l_mo = l_2_zol(z_0m, zol)
+    # Calculate the friction velocity
+    u_friction = mo.calc_u_star(U, Z_U, l_mo, d_0, z_0m)
+    upper = ZS >= h_c
+    u_z = np.ones(ZS.shape)
+    u_c = wind.calc_u_C_star(u_friction, h_c, d_0, z_0m, l_mo)
+    u_z[upper] = wind.calc_u_C_star(u_friction, ZS[upper], d_0, z_0m, l_mo)
+    h_b = hb_ratio * h_c
+    Xi_max, sigma_u, sigma_l = wind.canopy_shape(h_c,
+                                                 h_b=h_b,
+                                                 h_max=0.5)
+    f_a = wind.calc_canopy_distribution(Xi_max, sigma_u, sigma_l)
+    f_a_cum = wind.calc_cummulative_canopy_distribution(f_a)
+    u_z[~upper] = wind.calc_u_Massman(np.full(np.sum(~upper), u_c),
+                                      np.full(np.sum(~upper), h_c),
+                                      np.full(np.sum(~upper), lai),
+                                      ZS[~upper],
+                                      f_a_cum,
+                                      xi_soil=Z0_SOIL/h_c)
+    plot_profile(u_z, u_c, h_c)
+    plt.figure(figsize=FIGSIZE)
+    plt.plot(f_a, np.linspace(0, h_c, np.size(f_a)))
+    plt.ylim((0, h_c))
+    plt.xlabel('Desindad foliar relativa')
+    plt.ylabel('h$_c$ (m)')
+    return u_z, u_c
+
+
+def plot_profile(u_z, u_c, h_c):
     # Plots the wind profile for given stability lenght compared to a neutral atmosphere
-    plt.rcParams['figure.figsize'] = (10.0, 8.0)
-    # Estimate the wind profile for given LAI and MO Length
-    u_z, u_c, = wind_profile(lai, l_mo)
-    plt.plot(u_z, ZS, 'b')
+    fig, axs = plt.subplots(figsize=FIGSIZE)
+    axs.plot(u_z, ZS, 'b')
     # Plot the ufriction wind canopy
-    plt.plot(u_c, H_C, 'b*', label='$U_c$')
-    # Estimate the wind profile for given LAI neutral stability
-    u_z, u_c, = wind_profile(lai, l_mo=float('inf'))
-    plt.plot(u_z, ZS, 'r', label='neutral')
-    # Plot the ufriction wind canopy
-    plt.plot(u_c, H_C, 'r*', label='Uc neutral')
+    axs.plot(u_c, h_c, 'b*', label='$U_c$')
     # Plot the canopy windspeed according to the two different methods
-    plt.legend(loc='upper left')
-    plt.xlim((0, U))
-    plt.ylim((0, Z_U))
-    plt.xlabel('Wind Speed (m)')
-    plt.ylabel('$z/h_c$ (m)')
+    axs.legend(loc='upper left')
+    axs.set_xlim((0, U))
+    axs.set_ylim((0, Z_U))
+    axs.set_xlabel('Wind Speed (m)')
+    axs.set_ylabel('$z/h_c$ (m)')
+    plt.tight_layout()
+    plt.show()
 
 
-US = np.linspace(0.50, 5, 100)
+def plot_aerodynamic_resistance(zol, hc):
+    def calc_r_a(zol, hc):
+        z_0m, d_0 = calc_roughness(np.full_like(ZS, hc))
+        if zol != 0:
+            l_mo = z_0m / zol
+        else:
+            l_mo = np.inf
+        u_friction = mo.calc_u_star(US,
+                                    np.full_like(US, Z_U),
+                                    l_mo,
+                                    d_0,
+                                    z_0m)
+        ra = res.calc_R_A(Z_U, u_friction, l_mo, d_0, z_0m)
+        return ra
+
+    # Plots the resistances for a range of windspeeds
+    fig, axs = plt.subplots(figsize=FIGSIZE)
+    ra = calc_r_a(zol, hc)
+    axs.plot(US, ra, 'k')
+    axs.set_ylabel('Aerodynamic Resistance')
+    axs.set_ylim((0, 200))
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_resistances(lai, hc, l_mo, leaf_width, z0_soil, delta_t):
     def calc_resistances(lai, hc, l_mo, leaf_width, z0_soil, delta_t,
                         resistance_flag=0):
         rs_list = []
         rx_list = []
         ra_list = []
-        z_0m, d_0 = res.calc_roughness(lai, hc)
+        z_0m = np.full_like(ZS, hc) / 8.
+        d_0 = 2. * np.full_like(ZS, hc) / 2.
         for u in US:
             u_friction = mo.calc_u_star(u, Z_U, l_mo, d_0, z_0m)
             u_c = wind.calc_u_C_star(u_friction, hc, d_0, z_0m, l_mo)
@@ -103,10 +257,8 @@ def plot_resistances(lai, hc, l_mo, leaf_width, z0_soil, delta_t):
 
         return ra_list, rx_list, rs_list
 
-
     # Plots the resistances for a range of windspeeds
-    plt.rcParams['figure.figsize'] = (9.0, 9.0)
-    fig, axs = plt.subplots(3, 1, sharex=True)
+    fig, axs = plt.subplots(3, 1, sharex=True, figsize=FIG_SIZE)
     ra, rx, rs = calc_resistances(lai, hc, l_mo, leaf_width, z0_soil,
                                   delta_t, resistance_flag=0)
     axs[0].plot(US, ra, 'k', label='KN99')
@@ -139,3 +291,270 @@ def plot_resistances(lai, hc, l_mo, leaf_width, z0_soil, delta_t):
     axs[0].set_ylim((0, 200))
     axs[1].set_ylim((0, 200))
     axs[2].set_ylim((0, 200))
+    plt.tight_layout()
+    plt.subplots_adjust(hspace=0)
+    plt.show()
+
+
+def plot_flux_variation(values, le, le_c, le_pm, le_fao, t_c, t_s, t_0,
+                        var="LAI"):
+    fig, axs = plt.subplots(3, figsize=FIGSIZE, sharex=True)
+    axs[0].plot(values, le, linestyle="-", color="blue", label="ET$_{SW}$")
+    axs[0].plot(values, le_pm, linestyle="-", color="red", label="ET$_{PM}$")
+    axs[0].plot(2.88, le_fao, color="black", markersize=12, marker="*", ls="none",
+                label="ET$_{FAO56}$")
+
+    axs[1].plot(values, le_c / le, linestyle="-", color="green", label="$\Delta$ET$_{C}$")
+    axs[1].plot(values, 1 - le_c / le, linestyle="-", color="orange", label="\Delta$ET$_{S}$")
+
+
+    axs[2].plot(values, t_0, linestyle="-", color="black", label="T$_0$ - T$_a$")
+    axs[2].plot(values, t_c, linestyle="-", color="green", label="T$_c$ - T$_a$")
+    axs[2].plot(values, t_s, linestyle="-", color="orange", label="T$_s$ - T$_a$")
+    axs[2].axhline(0, c="silver", ls=":")
+
+    value_lims = np.min(values), np.max(values)
+
+    axs[0].legend()
+    axs[2].legend()
+    axs[0].set_ylabel("ET (mm / day)$)")
+    axs[0].set_ylim(ET_LIMS)
+    axs[1].set_ylabel("LAYER FRACTION")
+    axs[1].set_ylim((0, 1))
+    axs[2].set_ylabel("T$_x$ - T$_a$ (K)")
+    axs[2].set_ylim(DELTA_T_LIMS)
+    axs[0].set_xlim(value_lims)
+    axs[1].set_xlim(value_lims)
+    axs[2].set_xlim(value_lims)
+    axs[2].set_xlabel(var)
+    plt.tight_layout()
+    plt.subplots_adjust(hspace=0)
+    plt.show()
+
+
+def fluxes_and_resistances(g_st=0.5, r_ss=2000, h_c=H_C):
+    tair = np.full(N_SIM, TAIR)
+
+    r_st = 1. / (TSEB.res.molm2s1_2_ms1(tair, PRESS) * g_st)
+    sn = np.full(N_SIM, SDN) * (1. - 0.23)
+    sn_s = sn * np.exp(-0.5 * LAIS)
+    sn_c = sn - sn_s
+    es = met.calc_vapor_pressure(tair)
+    ea = es - VPD
+    ldn = rad.calc_emiss_atm(ea, tair) * met.calc_stephan_boltzmann(tair)
+    z_0m, d_0 = calc_roughness(np.full(N_SIM, h_c))
+    [_, t_s, t_c, _, _, _, le, _, le_c, *_] = pet.shuttleworth_wallace(
+        tair,
+        U,
+        ea,
+        PRESS,
+        sn_c,
+        sn_s,
+        ldn,
+        LAIS,
+        h_c,
+        EMIS_C,
+        EMIS_S,
+        z_0m,
+        d_0,
+        Z_U,
+        Z_T,
+        leaf_width=LEAF_WIDTH,
+        z0_soil=Z0_SOIL,
+        Rst_min=r_st,
+        R_ss=r_ss,
+        resistance_form=RES_FORM,
+        calcG_params=[[0], np.zeros(N_SIM)],
+        leaf_type=1,
+        verbose=False)
+
+    le_c[0] = 0
+    t_c[0] = np.nan
+
+    [_, t_0, _, le_pm, *_] = pet.penman_monteith(tair,
+                                                 U,
+                                                 ea,
+                                                 PRESS,
+                                                 sn,
+                                                 ldn,
+                                                 EMIS_C,
+                                                 LAIS,
+                                                 z_0m,
+                                                 d_0,
+                                                 Z_U,
+                                                 Z_T,
+                                                 Rst_min=r_st,
+                                                 calcG_params=[[0],
+                                                               np.zeros(N_SIM)],
+                                                 leaf_type=1,
+                                                 verbose=False)
+
+    le_fao = pet.pet_fao56(TAIR,
+                           U,
+                           ea[0],
+                           es[0],
+                           PRESS,
+                           np.asarray(SDN),
+                           Z_U,
+                           Z_T,
+                           f_cd=1,
+                           is_daily=True)
+
+    le_pm = met.flux_2_evaporation(le_pm, t_k=TAIR, time_domain=24)
+    le_fao = met.flux_2_evaporation(le_fao, t_k=TAIR, time_domain=24)
+    le = met.flux_2_evaporation(le, t_k=TAIR, time_domain=24)
+    le_c = met.flux_2_evaporation(le_c, t_k=TAIR, time_domain=24)
+
+    plot_flux_variation(LAIS, le, le_c, le_pm, le_fao,
+                        t_c - TAIR, t_s - TAIR, t_0 - TAIR,
+                        var="LAI")
+
+    return t_c, t_s, t_0
+
+
+def get_land_surface_temperature(vza, leaf_angle, temperatures, e_v=0.98, e_s=0.95):
+    t_c, t_s, t_0 = temperatures.result
+    bt_obs, emiss = lst_from_4sail(e_v, e_s, t_c, t_s, LAIS, vza, leaf_angle, t_atm=243.)
+    chi = inv.alpha2x_LAD(leaf_angle)
+    fc = TSEB.calc_F_theta_campbell(vza, LAIS, x_LAD=chi)
+    lst = (fc * t_c**4 + (1. - fc) * t_s**4)**0.25
+    bt_obs[LAIS == 0] = t_s[LAIS == 0]
+    lst[LAIS == 0] = t_s[LAIS == 0]
+    fig, axs = plt.subplots(nrows=2, figsize=FIGSIZE, sharex=True)
+    axs[0].plot(LAIS, fc, 'k-')
+    axs[0].set_ylabel('Crop Fraction')
+    axs[0].set_ylim((0, 1))
+    axs[1].plot(LAIS, t_0, 'k-', label='T$_0$')
+    axs[1].plot(LAIS, lst, 'r-', label='LST simplified')
+    axs[1].plot(LAIS, bt_obs, 'r:', label='LST analytical')
+    axs[1].set_xlabel('LAI')
+    axs[1].set_ylabel('LST')
+    axs[1].legend(loc='upper right')
+    axs[1].set_ylim((TAIR - 5, TAIR + 20))
+    axs[1].set_xlim((0, np.max(LAIS)))
+    plt.tight_layout()
+    plt.subplots_adjust(hspace=0)
+    plt.show()
+
+
+def plot_kcs(dates, lais, et_ref, et, kcs):
+    fig, axs = plt.subplots(nrows=2, ncols=3, figsize=FIGSIZE, sharex="col")
+    gs = axs[0, 1].get_gridspec()
+    for ax in axs[:, 1]:
+        ax.remove()
+    for ax in axs[:, 2]:
+        ax.remove()
+    axbig = fig.add_subplot(gs[0:, 1:])
+    axs[0, 0].plot(dates, lais, linestyle="-", color="green", lw=0.5)
+    axs[1, 0].plot(dates, et_ref, linestyle="-", color="black", lw=0.5,
+                   label="ET$_{ref}$")
+    axs[1, 0].plot(dates, et, linestyle="-", color="blue", lw=0.5,
+                   label="ET$_{a}$")
+    axbig.scatter(lais, kcs, c="black", s=3, label="$Kc_{SW}$")
+
+    axs[1, 0].legend()
+    axs[0, 0].set_ylabel("LAI")
+    axs[0, 0].set_ylim((0, 4))
+    axs[1, 0].set_ylabel("ET (mm/day)")
+    axs[1, 0].set_ylim(ET_LIMS)
+
+    axs[1, 0].xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+    axs[1, 0].xaxis.set_major_locator(mdates.MonthLocator(bymonth=range(1, 13, 3)))
+
+    axbig.set_ylabel("Crop coefficient")
+    axbig.set_ylim((0., 2))
+    axbig.set_xlabel("LAI")
+
+    plt.tight_layout()
+    plt.subplots_adjust(hspace=0)
+    plt.show()
+
+
+def build_day(doys, lai_range):
+    doy_angle = np.pi * (doys - 180.) / 365
+    lais = lai_range[0] + (lai_range[1] - lai_range[0]) * np.cos(doy_angle) ** 4
+    return np.maximum(0, lais)
+
+
+def crop_coefficients(g_st=0.5, r_ss=2000, h_c=H_C, lai_range=(0, 5)):
+    sn = CIMIS_DATA["Sol Rad (W/sq.m)"].values * (1. - 0.23)
+    sn_s = sn * np.exp(-0.5 * CIMIS_DATA["LAI"].values)
+    sn_c = sn - sn_s
+    tair = CIMIS_DATA["Avg Air Temp (C)"].values + 273.15
+    r_st = 1. / (TSEB.res.molm2s1_2_ms1(tair, PRESS) * g_st)
+    ea = 10 * CIMIS_DATA["Avg Vap Pres (kPa)"].values
+    ldn = rad.calc_emiss_atm(ea, tair) * met.calc_stephan_boltzmann(tair)
+    z_0m, d_0 = calc_roughness(np.full_like(sn, h_c))
+    lais = build_day(CIMIS_DATA["Jul"], lai_range)
+    [_, t_s, t_c, _, _, _, le, _, le_c, *_] = pet.shuttleworth_wallace(
+        tair,
+        CIMIS_DATA["Avg Wind Speed (m/s)"].values,
+        ea,
+        PRESS,
+        sn_c,
+        sn_s,
+        ldn,
+        lais,
+        h_c,
+        EMIS_C,
+        EMIS_S,
+        z_0m,
+        d_0,
+        Z_U,
+        Z_T,
+        leaf_width=LEAF_WIDTH,
+        z0_soil=Z0_SOIL,
+        Rst_min=r_st,
+        R_ss=r_ss,
+        resistance_form=RES_FORM,
+        calcG_params=[[0], np.zeros(sn.shape)],
+        leaf_type=1,
+        verbose=False)
+
+    et = met.flux_2_evaporation(le, t_k=TAIR, time_domain=24)
+    kcs_sw = et / CIMIS_DATA["ETo (mm)"].values
+    plot_kcs(CIMIS_DATA["Date"], lais, CIMIS_DATA["ETo (mm)"],
+             et, kcs_sw)
+
+
+def lst_from_4sail(e_v, e_s, t_c, t_s, lais, vza, leaf_angle, t_atm=0):
+
+    # Apply Kirchoff's law to get the soil and leaf bihemispherical reflectances
+    rsoil = np.full((1, N_SIM), 1 - e_s)
+    rho_leaf = np.full((1, N_SIM), 1 - e_v)
+    tau_leaf = np.zeros((1, N_SIM))
+    # Calculate the lidf,
+    lidf = fs.calc_lidf_campbell_vec(np.full(N_SIM, leaf_angle))
+
+    # 4SAIL for canopy reflectance and transmittance factors
+    [tss, too, tsstoo, rdd, tdd, rsd, tsd, rdo, tdo, rso, rsos, rsod, rddt,
+     rsdt, rdot,
+     rsodt, rsost, rsot, gammasdf, gammasdb,
+     gammaso] = fs.foursail_vec(lais,
+                                np.full(N_SIM, 0.01),
+                                lidf,
+                                np.full(N_SIM, 37),
+                                np.full(N_SIM, vza),
+                                np.zeros(N_SIM),
+                                rho_leaf, tau_leaf, rsoil)
+
+    gammad = 1 - rdd - tdd
+    gammao = 1 - rdo - tdo - too
+    ttot = (too + tdo) / (1. - rsoil * rdd)
+    gammaot = gammao + ttot * rsoil * gammad
+
+    aeev = gammaot
+    aees = ttot * e_v
+
+    # Get the different canopy broadband emssion components
+    h_vc = met.calc_stephan_boltzmann(t_c)
+    h_gc = met.calc_stephan_boltzmann(t_s)
+    h_sky = met.calc_stephan_boltzmann(t_atm)
+
+    # Calculate the blackbody emission temperature
+    lw = (rdot * h_sky + (aeev * h_vc + aees * h_gc )) / np.pi
+    lst_obs = (np.pi * lw / rad.SB) ** (0.25)
+
+    # Estimate the apparent surface directional emissivity
+    emiss = 1 - rdot
+    return lst_obs.reshape(-1), emiss.reshape(-1)
