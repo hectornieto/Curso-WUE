@@ -13,9 +13,10 @@ print("Gracias! librerías correctamente importadas")
 print("Puedes continuar con las siguientes tareas")
 
 slide_kwargs = {"continuous_update": False}
+FIGSIZE = (12.0, 6.0)
 
 # Generate the list with VZAs (from 0 to 89)
-VZAS = np.arange(0, 99)
+VZAS = np.arange(0, 90)
 INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "input")
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
 SOIL_FOLDER = os.path.join(INPUT_FOLDER, "soil_spectral_library")
@@ -608,7 +609,7 @@ def update_4sail_spectrum(lai, hotspot, leaf_angle, sza, vza, psi, skyl,
 
 
 def plot_spectrum(wls, rho, tau=None):
-    plt.figure(figsize = (12.0, 6.0))
+    plt.figure(figsize=FIGSIZE)
     plt.plot(wls, rho, "k")
     if tau is not None:
         plt.plot(wls, 1. - tau, "b")
@@ -621,7 +622,7 @@ def plot_spectrum(wls, rho, tau=None):
 
 
 def plot_sensitivity(wls, rhos, param_name, param_values, taus=None):
-    plt.figure(figsize=(12.0, 6.0))
+    plt.figure(figsize=FIGSIZE)
     colors = plt.cm.RdYlGn(np.linspace(0, 1, param_values.shape[0]))
     for i, value in enumerate(param_values):
         plt.plot(wls, rhos[i], color=colors[i], label=np.round(value, 3))
@@ -713,7 +714,7 @@ def sensor_sensitivity(sensor, spectra):
     rho_full = spectra.result[1]
     rho_sensor = []
     wls_sensor = []
-    plt.figure(figsize=(12.0, 6.0))
+    plt.figure(figsize=FIGSIZE)
     for band in srfs.dtype.names[1:]:
         wls_sensor.append(np.sum(wls * srfs[band]) / np.sum(srfs[band]))
         rho_sensor.append(np.sum(rho_full * srfs[band], axis=1) / np.sum(srfs[band]))
@@ -803,7 +804,7 @@ def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_rang
     ndre = (result[nir] - result[rededge]) / (result[nir] + result[rededge])
     ndwi = (result[nir] - result[swir]) / (result[nir] + result[swir])
 
-    fig, axs = plt.subplots(ncols=3, figsize=(12.0, 6.0), sharey=True)
+    fig, axs = plt.subplots(ncols=3, figsize=FIGSIZE, sharey=True)
     axs[0].scatter(result["LAI"], ndvi, c="blue", s=3, alpha=0.5)
     axs[0].set_xlabel('LAI')
     axs[0].set_title('NDVI')
@@ -825,5 +826,4 @@ def find_band_pos(band_names, wls_sensor, wl):
     min_diff = np.min(diff)
     pos = int(np.where(diff == min_diff)[0])
     return band_names[pos]
-
 
