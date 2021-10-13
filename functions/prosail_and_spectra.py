@@ -15,6 +15,8 @@ print("Puedes continuar con las siguientes tareas")
 slide_kwargs = {"continuous_update": False}
 FIGSIZE = (12.0, 6.0)
 
+REGIONS = {"B": (400, 500), "G": (500, 600), "R": (600, 700),
+               "R-E": (700, 800), "NIR": (800, 1100), "SWIR": (1100, 2500)}
 # Generate the list with VZAs (from 0 to 89)
 VZAS = np.arange(0, 90)
 INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "input")
@@ -97,12 +99,12 @@ w_lai = w.FloatSlider(value=inv.MEAN_LAI,
                       max=inv.MAX_LAI,
                       step=0.1, description='LAI (m²/m²):', **slide_kwargs)
 w_hotspot = w.FloatSlider(value=inv.MEAN_HOTSPOT,
-                          min=inv.MIN_HOTSPOT,
-                          max=inv.MAX_HOTSPOT,
+                          min=0.001,
+                          max=1,
                           step=0.01, description='hotspot (-):', **slide_kwargs)
 w_leaf_angle = w.FloatSlider(value=inv.MEAN_LEAF_ANGLE,
-                             min=inv.MIN_LEAF_ANGLE,
-                             max=inv.MAX_LEAF_ANGLE,
+                             min=0,
+                             max=90,
                              step=1, description='Leaf Angle (deg.):',
                              **slide_kwargs)
 w_sza = w.FloatSlider(value=35., min=0, max=89, step=1,
@@ -193,15 +195,15 @@ w_range_lai = w.FloatRangeSlider(value=RANGE_DICT["LAI"],
                                  readout_format= '.1f',
                                  **slide_kwargs)
 w_range_leaf_angle = w.FloatRangeSlider(value=RANGE_DICT["leaf_angle"],
-                                 min=RANGE_DICT["leaf_angle"][0],
-                                 max=RANGE_DICT["leaf_angle"][1],
+                                 min=0,
+                                 max=90,
                                  step=1,
                                  description="Leaf Angle",
                                  readout_format= '.0f',
                                  **slide_kwargs)
 w_range_hotspot = w.FloatRangeSlider(value=RANGE_DICT["hotspot"],
-                                 min=RANGE_DICT["hotspot"][0],
-                                 max=RANGE_DICT["hotspot"][1],
+                                 min=0,
+                                 max=1,
                                  step=0.01,
                                  description="hotspot",
                                  readout_format= '.2f',
@@ -609,14 +611,23 @@ def update_4sail_spectrum(lai, hotspot, leaf_angle, sza, vza, psi, skyl,
 
 
 def plot_spectrum(wls, rho, tau=None):
-    plt.figure(figsize=FIGSIZE)
-    plt.plot(wls, rho, "k")
+
+    fig, ax = plt.subplots(figsize=FIGSIZE)
+    ax.plot(wls, rho, "k")
     if tau is not None:
-        plt.plot(wls, 1. - tau, "b")
-    plt.ylabel('Reflectance')
-    plt.ylim((0, 1))
-    plt.xlim((400, 2500))
-    plt.xlabel('Wavelength (nm)')
+        secax = ax.secondary_yaxis('right', functions=(lambda x: 1 - x,
+                                                       lambda x: 1 - x),
+                                   )
+        secax.set_ylabel('Transmittance', color="blue")
+        secax.tick_params(axis='y', colors='blue')
+        ax.plot(wls, 1. - tau, "b")
+    ax.set_ylabel('Reflectance')
+    ax.set_ylim((0, 1))
+    ax.set_xlim((400, 2500))
+    ax.set_xlabel('Wavelength (nm)')
+    for region, wls in REGIONS.items():
+        ax.axvline(x=wls[1], c="silver",  ls="--")
+        ax.text(np.mean(wls), 0.95, region, size="large", ha="center")
     plt.tight_layout()
     plt.show()
 
@@ -634,6 +645,9 @@ def plot_sensitivity(wls, rhos, param_name, param_values, taus=None):
     plt.ylim((0, 1))
     plt.xlabel('Wavelength (nm)')
     plt.xlim((400, 2500))
+    for region, wls in REGIONS.items():
+        plt.axvline(x=wls[1], c="silver",  ls="--")
+        plt.text(np.mean(wls), 0.95, region, size="large", ha="center")
     plt.tight_layout()
     plt.show()
 
@@ -725,6 +739,9 @@ def sensor_sensitivity(sensor, spectra):
     plt.ylabel('Spectral Response')
     plt.ylim((0, 1))
     plt.xlabel('Wavelength (nm)')
+    for region, wls in REGIONS.items():
+        plt.axvline(x=wls[1], c="silver",  ls="--")
+        plt.text(np.mean(wls), 0.95, region, size="large", ha="center")
     plt.xlim((400, 2501))
     plt.tight_layout()
     rho_sensor = np.asarray(rho_sensor).T
@@ -779,9 +796,9 @@ def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_rang
                                                       soil_spectrum,
                                                       srf=srf,
                                                       skyl=skyl,
-                                                      sza=sza,
-                                                      vza=vza,
-                                                      psi=psi,
+                                                      sza=np.full(n_simulations, sza),
+                                                      vza=np.full(n_simulations, vza),
+                                                      psi=np.full(n_simulations, psi),
                                                       calc_FAPAR=False,
                                                       reduce_4sail=True)
 
