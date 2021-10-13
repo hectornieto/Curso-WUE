@@ -586,5 +586,4 @@ def rst_to_gst(rst, t_c=293.15, p=1013.25):
     gst = 1. / (rst * res.molm2s1_2_ms1(t_c, p=p))
     return gst
 
-print(rst_to_gst(100))
-print(rc_to_gst(70, lai=0.5 * LAI_REF))
+
