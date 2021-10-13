@@ -83,3 +83,5 @@ target/
 *.ppt*
 *.xls*
 
+internal_documents/
+
