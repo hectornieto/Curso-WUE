@@ -799,7 +799,7 @@ def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_rang
                                                       sza=np.full(n_simulations, sza),
                                                       vza=np.full(n_simulations, vza),
                                                       psi=np.full(n_simulations, psi),
-                                                      calc_FAPAR=False,
+                                                      calc_FAPAR=True,
                                                       reduce_4sail=True)
 
     rho_canopy_vec = pd.DataFrame(rho_canopy_vec, columns=band_names)
@@ -821,16 +821,19 @@ def build_random_simulations(n_sim, n_leaf_range, cab_range, car_range, ant_rang
     ndre = (result[nir] - result[rededge]) / (result[nir] + result[rededge])
     ndwi = (result[nir] - result[swir]) / (result[nir] + result[swir])
 
-    fig, axs = plt.subplots(ncols=3, figsize=FIGSIZE, sharey=True)
+    fig, axs = plt.subplots(ncols=4, figsize=FIGSIZE, sharey=True)
     axs[0].scatter(result["LAI"], ndvi, c="blue", s=3, alpha=0.5)
     axs[0].set_xlabel('LAI')
     axs[0].set_title('NDVI')
-    axs[1].scatter(result["Cab"], ndre, c="blue", s=3, alpha=0.5)
-    axs[1].set_xlabel('C$_{a+b}$ ($\mu$g/cm²)')
-    axs[1].set_title('NDRE')
-    axs[2].scatter(result["Cw"], ndwi, c="blue", s=3, alpha=0.5)
-    axs[2].set_xlabel('C$_{w}$ (g/cm²)')
-    axs[2].set_title('NDWI')
+    axs[1].scatter(result["fAPAR"], ndvi, c="blue", s=3, alpha=0.5)
+    axs[1].set_xlabel('fAPAR')
+    axs[1].set_title('NDVI')
+    axs[2].scatter(result["Cab"], ndre, c="blue", s=3, alpha=0.5)
+    axs[2].set_xlabel('C$_{a+b}$ ($\mu$g/cm²)')
+    axs[2].set_title('NDRE')
+    axs[3].scatter(result["Cw"], ndwi, c="blue", s=3, alpha=0.5)
+    axs[3].set_xlabel('C$_{w}$ (g/cm²)')
+    axs[3].set_title('NDWI')
     axs[0].set_ylabel('Índice de Vegetación')
     axs[0].set_ylim((0, 1))
     fig.tight_layout()
