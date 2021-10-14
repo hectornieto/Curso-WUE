@@ -10,10 +10,8 @@ from pypro4sail import four_sail as sail
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import pandas as pd
 import ipywidgets as w
-from IPython.display import display, clear_output
 print("Gracias! librerías correctamente importadas")
 print("Puedes continuar con las siguientes tareas")
 
@@ -121,7 +119,7 @@ def plot_attenuation(length, tau):
 def plot_fipar(lai, leaf_angle):
     fig, axs = plt.subplots(figsize=FIGSIZE)
     # Create an empty list with the returning f_c for each canopy
-    chi = inv.alpha2x_LAD(leaf_angle)
+    chi = rad.leafangle_2_chi(leaf_angle)
     szas = np.arange(0, 90)
     fipar = TSEB.calc_F_theta_campbell(szas, lai, x_LAD=chi)
     # Plot the results
@@ -144,7 +142,7 @@ def solar_irradiance(sdn):
 
 def plot_net_solar_radiation(local_lai, leaf_angle, h_c, f_c, row_distance,
                              row_direction, sdn_day, skyl=0.1, fvis=0.55):
-    chi = inv.alpha2x_LAD(leaf_angle)
+    chi = rad.leafangle_2_chi(leaf_angle)
     lai = np.full(N_SIM, local_lai) * f_c
     sdn = solar_irradiance(sdn_day)
     sdn_dir = (1. - skyl) * sdn
@@ -192,7 +190,7 @@ def plot_apar(local_lai, leaf_angle, leaf_absorbance, h_c, f_c, row_distance,
     # Tweak for introducing the calc_spectra_Cambpell inputs
     rho_leaf_vis = 0.5 * (1 - np.full(N_SIM, leaf_absorbance))
     tau_leaf_vis = 0.5 * (1 - np.full(N_SIM, leaf_absorbance))
-    chi = inv.alpha2x_LAD(leaf_angle)
+    chi = rad.leafangle_2_chi(leaf_angle)
     lai = np.full(N_SIM, local_lai) * f_c
     sdn = solar_irradiance(sdn_day)
     sdn_dir = (1. - skyl) * sdn

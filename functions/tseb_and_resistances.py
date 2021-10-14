@@ -7,7 +7,6 @@ from pyTSEB import energy_combination_ET as pet
 from pyTSEB import meteo_utils as met
 from pyTSEB import net_radiation as rad
 from pypro4sail import four_sail as fs
-from pypro4sail import machine_learning_regression as inv
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -101,7 +100,7 @@ w_es = w.FloatSlider(min=0.90, max=1, value=0.97, step=0.001,
                      **slide_kwargs)
 
 def plot_fveg(lai, leaf_angle=57):
-    chi = inv.alpha2x_LAD(leaf_angle)
+    chi = rad.leafangle_2_chi(leaf_angle)
     # Create an empty list with the returning f_c for each canopy
     fc = TSEB.calc_F_theta_campbell(VZAS, lai, x_LAD=chi)
     fc_sph = TSEB.calc_F_theta_campbell(VZAS, lai, x_LAD=1)
@@ -432,7 +431,7 @@ def fluxes_and_resistances(g_st=GST_REF, r_ss=2000, h_c=H_C_REF):
 def get_land_surface_temperature(vza, leaf_angle, temperatures, e_v=0.98, e_s=0.95):
     t_c, t_s, t_0 = temperatures.result
     bt_obs, emiss = lst_from_4sail(e_v, e_s, t_c, t_s, LAIS, vza, leaf_angle, t_atm=243.)
-    chi = inv.alpha2x_LAD(leaf_angle)
+    chi = rad.leafangle_2_chi(leaf_angle)
     fc = TSEB.calc_F_theta_campbell(vza, LAIS, x_LAD=chi)
     lst = (fc * t_c**4 + (1. - fc) * t_s**4)**0.25
     bt_obs[LAIS == 0] = t_s[LAIS == 0]
