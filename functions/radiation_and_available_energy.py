@@ -172,6 +172,7 @@ def plot_net_solar_radiation(local_lai, leaf_angle, h_c, f_c, row_distance,
                                       LAI_eff=lai_eff)
 
     sn = sn_v + sn_s
+    albedo = 1. - sn / sdn
     fig, axs = plt.subplots(figsize=FIGSIZE)
     # Plot the results
     axs.plot(HOURS, sn, 'black', label="Net Radiation")
@@ -182,6 +183,11 @@ def plot_net_solar_radiation(local_lai, leaf_angle, h_c, f_c, row_distance,
     axs.set_xlim((TIME_START, TIME_END))
     axs.set_ylim((0, 1000))
     axs.legend()
+    secax = axs.twinx()
+    secax.plot(HOURS, albedo, "b")
+    secax.set_ylabel('Albedo', color="blue")
+    secax.tick_params(axis='y', colors='blue')
+    secax.set_ylim((0, 1))
     plt.show()
 
 
