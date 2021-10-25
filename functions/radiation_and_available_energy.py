@@ -312,9 +312,10 @@ def bidirectional_reflectance(cab, lai, leaf_angle, sza=35., saa=180., skyl=0.1)
                             tau_leaf.T,
                             rho_soil.T)
 
+
+    r2 = rdot * skyl + rsot * (1 - skyl)
     if lai == 0:
         r2 = rho_soil.T
-    r2 = rdot * skyl + rsot * (1 - skyl)
     albedo = np.sum(r2 * cosvza * sinvza * step_vza * step_psi / np.pi, axis=1)
     polar_plot(vzas, vaas, r2, sza, saa, wls_sim, albedo)
 
