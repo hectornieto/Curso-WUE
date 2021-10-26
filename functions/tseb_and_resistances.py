@@ -530,6 +530,11 @@ def crop_coefficients(g_st=GST_REF, r_ss=2000, h_c=H_C_REF, lai_range=(0, 5)):
 
     et = met.flux_2_evaporation(le, t_k=TAIR, time_domain=24)
     kcs_sw = et / CIMIS_DATA["ETo (mm)"].values
+    out_file = os.path.join(OUTPUT_FOLDER, "lai_vs_kc.csv")
+    if not os.path.isdir(OUTPUT_FOLDER):
+        os.makedirs(OUTPUT_FOLDER)
+    result = pd.DataFrame({"LAI": lais, "Kc": kcs_sw})
+    result.to_csv(out_file, index=False)
     plot_kcs(CIMIS_DATA["Date"], lais, CIMIS_DATA["ETo (mm)"],
              et, kcs_sw)
 
