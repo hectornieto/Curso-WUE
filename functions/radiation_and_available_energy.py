@@ -48,12 +48,8 @@ TAIR = 25 + 273.15  # K
 PRESS = 1013.  # mb
 TIME_START = 0
 TIME_END = 24
+LATITUDE = 40
 HOURS = np.linspace(TIME_START, TIME_END, N_SIM)
-SZAS, SAAS = met.calc_sun_angles(np.full(N_SIM, 40),
-                                 np.zeros(N_SIM),
-                                 np.zeros(N_SIM),
-                                 np.full(N_SIM, 180),
-                                 HOURS)
 
 ALBEDO_WEIGHTS = pd.read_csv(ALBEDO_WEIGHT_FILE)
 w_kappa = w.FloatSlider(min=0, max=1, value=0.5,
@@ -99,6 +95,8 @@ w_hr = w.FloatSlider(min=0, max=100, value=50, step=0.1,
                        description='HR (%)', **slide_kwargs)
 w_emiss = w.FloatSlider(min=0.9, max=0.99, value=0.98, step=0.01,
                         description='$\epsilon$', **slide_kwargs)
+w_lat = w.FloatSlider(min=0.0, max=90, value=40, step=1,
+                        description='Latitud absoluta (deg.)', **slide_kwargs)
 
 def beer_lambert_law(kappa, length):
      tau = np.exp(-kappa * length)
@@ -132,8 +130,8 @@ def plot_fipar(lai, leaf_angle):
     plt.show()
 
 
-def solar_irradiance(sdn):
-    rdirvis, rdifvis, rdirnir, rdifnir = rad.calc_potential_irradiance_weiss(SZAS,
+def solar_irradiance(sdn, szas):
+    rdirvis, rdifvis, rdirnir, rdifnir = rad.calc_potential_irradiance_weiss(szas,
                                                                              press=np.full(N_SIM, 1013.15))
     sdn_pot = rdirvis + rdifvis + rdirnir + rdifnir
     sdn = sdn * np.size(sdn_pot) * sdn_pot / np.sum(sdn_pot)
@@ -141,23 +139,29 @@ def solar_irradiance(sdn):
 
 
 def plot_net_solar_radiation(local_lai, leaf_angle, h_c, f_c, row_distance,
-                             row_direction, sdn_day, skyl=0.1, fvis=0.55):
+                             row_direction, sdn_day, skyl=0.1, fvis=0.55,
+                             lat=LATITUDE):
     chi = rad.leafangle_2_chi(leaf_angle)
     lai = np.full(N_SIM, local_lai) * f_c
-    sdn = solar_irradiance(sdn_day)
+    szas, saas = met.calc_sun_angles(np.full(N_SIM, lat),
+                                     np.zeros(N_SIM),
+                                     np.zeros(N_SIM),
+                                     np.full(N_SIM, 180),
+                                     HOURS)
+    sdn = solar_irradiance(sdn_day, szas)
     sdn_dir = (1. - skyl) * sdn
     sdn_dif = skyl * sdn
     w_c = row_distance * f_c / np.full(N_SIM, h_c)
-    psi = relative_azimuth(row_direction, SAAS)
+    psi = relative_azimuth(row_direction, saas)
     omega = ci.calc_omega_rows(np.full(N_SIM, lai),
                                np.full(N_SIM, f_c),
-                               theta=SZAS,
+                               theta=szas,
                                psi=psi,
                                w_c=w_c,
                                x_lad=np.full(N_SIM, chi))
     lai_eff = local_lai * omega
     sn_v, sn_s = rad.calc_Sn_Campbell(lai,
-                                      SZAS,
+                                      szas,
                                       sdn_dir,
                                       sdn_dif,
                                       fvis,
@@ -192,25 +196,31 @@ def plot_net_solar_radiation(local_lai, leaf_angle, h_c, f_c, row_distance,
 
 
 def plot_apar(local_lai, leaf_angle, leaf_absorbance, h_c, f_c, row_distance,
-              row_direction, sdn_day, soil_albedo=0.15, skyl=0.1, fvis=0.55):
+              row_direction, sdn_day, soil_albedo=0.15, skyl=0.1, fvis=0.55,
+              lat=LATITUDE):
+    szas, saas = met.calc_sun_angles(np.full(N_SIM, lat),
+                                     np.zeros(N_SIM),
+                                     np.zeros(N_SIM),
+                                     np.full(N_SIM, 180),
+                                     HOURS)
     # Tweak for introducing the calc_spectra_Cambpell inputs
     rho_leaf_vis = 0.5 * (1 - np.full(N_SIM, leaf_absorbance))
     tau_leaf_vis = 0.5 * (1 - np.full(N_SIM, leaf_absorbance))
     chi = rad.leafangle_2_chi(leaf_angle)
     lai = np.full(N_SIM, local_lai) * f_c
-    sdn = solar_irradiance(sdn_day)
+    sdn = solar_irradiance(sdn_day, szas)
     sdn_dir = (1. - skyl) * sdn
     sdn_dif = skyl * sdn
     w_c = row_distance * f_c / np.full(N_SIM, h_c)
     omega = ci.calc_omega_rows(np.full(N_SIM, lai),
                                np.full(N_SIM, f_c),
-                               theta=SZAS,
-                               psi=row_direction - SAAS,
+                               theta=szas,
+                               psi=row_direction - saas,
                                w_c=w_c,
                                x_lad=np.full(N_SIM, chi))
     lai_eff = local_lai * omega
     albb, albd, taubt, taudt = rad.calc_spectra_Cambpell(lai,
-                                                         SZAS,
+                                                         szas,
                                                          rho_leaf_vis,
                                                          tau_leaf_vis,
                                                          np.full(N_SIM, soil_albedo),
@@ -219,7 +229,7 @@ def plot_apar(local_lai, leaf_angle, leaf_absorbance, h_c, f_c, row_distance,
     apar = (1.0 - taubt) * (1.0 - albb) * sdn_dir * fvis + \
            (1.0 - taudt) * (1.0 - albd) * sdn_dif * fvis
 
-    akb = rad.calc_K_be_Campbell(SZAS, chi, radians=False)
+    akb = rad.calc_K_be_Campbell(szas, chi, radians=False)
     taub = np.exp(-akb * lai_eff)
     taud = rad._calc_taud(chi, lai)
     ipar = (1.0 - taub) * sdn_dir * fvis + (1.0 - taud) * sdn_dif * fvis
