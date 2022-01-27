@@ -1,4 +1,4 @@
-# Curso sobre Teletedección Aplicada al la Eficiencia del Uso del Agua
+# Curso sobre Teletedección Aplicada a la Eficiencia del Uso del Agua
 
 ## Introducción
 Este repositorio contiene el material online necesario para ejecutar los cuadernos digitales (**Jupyter Notebook**) desarrollados para el curso.
