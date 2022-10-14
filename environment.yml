@@ -19,4 +19,5 @@ dependencies:
     - pip:
         - git+https://github.com/hectornieto/pypro4sail
         - git+https://github.com/hectornieto/pyTSEB
+        - git+https://github.com/hectornieto/model_evaluation
         - git+https://github.com/radosuav/pyDMS
