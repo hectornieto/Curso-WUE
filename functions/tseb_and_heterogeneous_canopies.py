@@ -1170,7 +1170,7 @@ def validate_fluxes(out_df, daily_df):
                                    out_df["LE"] >= flux_lims[0],
                                    METEO_DATA["LE"] >= flux_lims[0]))
 
-    fig, axs = plt.subplots(ncols=2)
+    fig, axs = plt.subplots(ncols=2, figsize=FIGSIZE)
     axs[0].scatter(out_df["LE"].loc[dates], METEO_DATA["LE"].loc[dates],
                    c='b', marker='.', alpha=0.2, label='H', s=3)
     axs[0].set_xlim(flux_lims)
@@ -1243,7 +1243,7 @@ def create_flux_timeseries(date_range,
 
 def plot_flux_timeseries(date_range, df, daily_df, include_obs=False):
 
-    fig, axs = plt.subplots(nrows=3, sharex=True)
+    fig, axs = plt.subplots(nrows=3, sharex=True, figsize=FIGSIZE)
     axs[0].plot(df["TIMESTAMP"], df["NETRAD"], "k:", label="$R n$")
     axs[0].plot(df["TIMESTAMP"], df["LE"], "b", label="$\lambda E$")
     axs[0].set_ylim(FLUX_LIMS)
