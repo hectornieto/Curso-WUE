@@ -747,7 +747,6 @@ def prepare_tseb_data(h_c, f_c, w_c, hb_ratio, h_c_max, x_lad, set_stress=None):
 
     local_lai = METEO_DATA["LAI"] / f_c
     lai_eff = local_lai * omega
-    fc0 = TSEB.calc_F_theta_campbell(0, local_lai, w_c, omega_0, x_lad)
     # Estimates the direct and diffuse solar radiation
     difvis, difnir, fvis, fnir = TSEB.rad.calc_difuse_ratio(METEO_DATA["SW_IN_F"],
                                                             np.minimum(METEO_DATA["SZA"],
@@ -757,6 +756,7 @@ def prepare_tseb_data(h_c, f_c, w_c, hb_ratio, h_c_max, x_lad, set_stress=None):
     skyl = fvis * difvis + fnir * difnir
     sdn_dir = (1. - skyl) * METEO_DATA["SW_IN_F"]
     sdn_dif = skyl * METEO_DATA["SW_IN_F"]
+    # Calculate net shortwave radiation
     sn_c, sn_s = TSEB.rad.calc_Sn_Campbell(
         METEO_DATA["LAI"].values,
         METEO_DATA["SZA"].values,
@@ -787,20 +787,21 @@ def prepare_tseb_data(h_c, f_c, w_c, hb_ratio, h_c_max, x_lad, set_stress=None):
     d_0[d_0 < 0] = 0
     z_0m[np.isnan(z_0m)] = Z0_SOIL
     z_0m[z_0m < Z0_SOIL] = Z0_SOIL
+
+    # Compute canopy leaf density profile
     h_b = hb_ratio * h_c
-    Xi_max, sigma_u, sigma_l = wind.canopy_shape(h_c,
+    xi_max, sigma_u, sigma_l = wind.canopy_shape(h_c,
                                                  h_b=h_b,
                                                  h_max=h_c_max)
-    f_a = wind.calc_canopy_distribution(Xi_max, sigma_u, sigma_l)
+    f_a = wind.calc_canopy_distribution(xi_max, sigma_u, sigma_l)
     f_a_cum = wind.calc_cummulative_canopy_distribution(f_a)
     r_st = None
     fc0 = None
-    if type(set_stress) != type(None):
+    if not isinstance(set_stress, type(None)):
+        # Get potential stomatal resitance to compute a stress metric
         fc0 = TSEB.calc_F_theta_campbell(np.zeros(dims), METEO_DATA["LAI"],
                                          w_C=w_c, Omega0=omega_0, x_LAD=x_lad)
         par_in = fvis * METEO_DATA["SW_IN_F"].values / lf.MUEINSTEIN_2_WATT
-        par_dir = (1. - skyl) * par_in
-        par_dif = skyl * par_in
 
         # Initialize potential stomatal resistance
         l_mo = np.inf
@@ -842,41 +843,6 @@ def prepare_tseb_data(h_c, f_c, w_c, hb_ratio, h_c_max, x_lad, set_stress=None):
                                    d_0=D_0,
                                    fw=np.full(dims, 1 - set_stress),
                                    verbose=False)[2]
-
-        # r_soil_0 = lf.soil_respiration_lloyd(METEO_DATA["TA_F"].values,
-        #                                      f_soil_ref=F_SOIL_10_0)
-        # _, _, g_st_0, *_ = lf.gpp_canopy_no_gs(METEO_DATA["VPD_F"].values,
-        #                                        r_x,
-        #                                        r_a,
-        #                                        METEO_DATA["TA_F"].values,
-        #                                        METEO_DATA["LAI"].values,
-        #                                        par_dir,
-        #                                        par_dif,
-        #                                        METEO_DATA["SZA"].values,
-        #                                        lai_eff=lai_eff,
-        #                                        x_lad=x_lad,
-        #                                        rho_leaf=np.full(dims, 0.07),
-        #                                        tau_leaf=np.full(dims, 0.07),
-        #                                        rho_soil=np.full(dims, 0.15),
-        #                                        press=METEO_DATA["PA_F"].values,
-        #                                        ca=CA,
-        #                                        theta=THETA,
-        #                                        alpha=ALPHA,
-        #                                        c_kc=C_KC,
-        #                                        c_ko=C_KO,
-        #                                        c_tes=C_TES,
-        #                                        c_rd=C_RD,
-        #                                        c_vcx=C_VCX,
-        #                                        c_jx=C_JX,
-        #                                        f_soil=r_soil_0,
-        #                                        kn=KN,
-        #                                        kd_star=KD_STAR,
-        #                                        g0p=G0P,
-        #                                        a_1=A_1,
-        #                                        d_0=D_0,
-        #                                        fw=np.full(dims, 1 - set_stress),
-        #                                        leaf_type=1,
-        #                                        verbose=False)
 
         g_st_0[g_st_0 < G0P] = G0P
         g_st_0 *= lf.GV_GC_RATIO
