@@ -969,7 +969,7 @@ def run_tseb(h_c, f_c, w_c, hb_ratio, h_c_max, leaf_angle):
     ea = TSEB.met.calc_vapor_pressure(METEO_DATA["TA_F"].values) - METEO_DATA[
         "VPD_F"].values
 
-    [flag, t_s, t_c, _, ln_s, ln_c, le_c, h_c, le_s, h_s, *_] = TSEB.TSEB_PT(
+    [flag, t_s, t_c, _, ln_s, ln_c, le_c, h_c, le_s, h_s, g, *_] = TSEB.TSEB_PT(
         METEO_DATA["LST"].values,
         np.zeros(dims),
         METEO_DATA["TA_F"].values,
@@ -1002,19 +1002,31 @@ def run_tseb(h_c, f_c, w_c, hb_ratio, h_c_max, leaf_angle):
     h = np.clip(h_c + h_s, *FLUX_LIMS)
     no_valid = flag == 255
     le[no_valid] = np.nan
+    le_c[no_valid] = np.nan
+    h[no_valid] = np.nan
+    h_c[no_valid] = np.nan
+    g[no_valid] = np.nan
+    t_c[no_valid] = np.nan
+    t_s[no_valid] = np.nan
     out_df = METEO_DATA[["TIMESTAMP", "DATE", "TOD", "LAI", "TA_F", "SW_IN_F", "LST"]]
     out_df["LE"] = le
+    out_df["LE_C"] = le_c
     out_df["H"] = h
+    out_df["H_C"] = h_c
+    out_df["G"] = g
+    out_df["T_C"] = t_c
+    out_df["T_S"] = t_s
+    out_df["NETRAD_C"] = sn_c + ln_c
     out_df["TSEB_QC"] = flag
     out_df["NETRAD"] = sn_c + sn_s + ln_c + ln_s
     out_df.to_csv("./output/tseb_olive.csv", header=True, sep=",")
-    daily_df = out_df[["DATE", "LAI", "TA_F", "SW_IN_F", "LE"]].groupby("DATE").mean()
+    daily_df = out_df[["DATE", "LAI", "TA_F", "SW_IN_F", "LE", "H", "LE_C", "H_C"]].groupby("DATE").mean()
     daily_df["ET"] = met.flux_2_evaporation(daily_df["LE"],
                                             t_k=daily_df["TA_F"],
                                             time_domain=24)
     daily_df.reset_index(inplace=True)
     daily_df = daily_df.rename(columns={'index': 'DATE'})
-
+    daily_df.to_csv("./output/tseb_olive_daily.csv", header=True, sep=",")
     print("Done!")
 
     validate_fluxes(out_df, daily_df)
