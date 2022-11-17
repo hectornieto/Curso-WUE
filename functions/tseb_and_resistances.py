@@ -90,6 +90,8 @@ LON_CND = -3.227659
 STDLON_CND = 15.
 ELEV_CND = 366.0
 E_SURF = 0.98
+ZT_CND = 9
+ZU_CND = 9
 
 C_KC = [404.9, 79430.0]
 C_KO = [278.4, 36380.0]
@@ -981,12 +983,12 @@ def run_tseb(h_c, f_c, w_c, hb_ratio, h_c_max, leaf_angle):
         METEO_DATA["LW_IN_F"].values,
         METEO_DATA["LAI"].values,
         np.full(dims, h_c),
-        0.99,
+        EMIS_C,
         EMIS_S,
         z_0m,
         d_0,
-        np.full(dims, 9),
-        9,
+        np.full(dims, ZU_CND),
+        ZT_CND,
         x_LAD=x_lad,
         f_c=f_c,
         w_C=w_c,
@@ -994,8 +996,8 @@ def run_tseb(h_c, f_c, w_c, hb_ratio, h_c_max, leaf_angle):
         z0_soil=Z0_SOIL,
         resistance_form=[TSEB.KUSTAS_NORMAN_1999, {"KN_c": np.full(dims, 0.0038)}],
         calcG_params=[[1], 0.35],
-        verbose=False
-        # massman_profile=[C_D_MASSMAN, f_a_cum]
+        verbose=False,
+        massman_profile=[C_D_MASSMAN, f_a_cum]
     )
 
     le = np.clip(le_c + le_s, *FLUX_LIMS)
