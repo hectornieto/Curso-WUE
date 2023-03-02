@@ -16,6 +16,7 @@ dependencies:
     - SALib
     - matplotlib
     - cdsapi
+    - numba
     - pip:
         - git+https://github.com/hectornieto/pypro4sail
         - git+https://github.com/hectornieto/pyTSEB
