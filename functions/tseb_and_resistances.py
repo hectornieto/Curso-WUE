@@ -24,7 +24,14 @@ np.seterr(all="ignore")
 # Generate the list with VZAs (from 0 to 89)
 INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "input")
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
-CIMIS_FILE_PATH = os.path.join(INPUT_FOLDER, "meteo", "meteo_daily.csv")
+METEO_DAILY_FILE_PATH = os.path.join(INPUT_FOLDER, "meteo",
+                                     "meteo_daily_olive.csv")
+
+LAT_CND = 37.914998
+LON_CND = -3.227659
+STDLON_CND = 15.
+ELEV_CND = 366.0
+E_SURF = 0.98
 
 N_SIM = 50
 LAIS = np.linspace(0, 6, N_SIM)
@@ -63,11 +70,42 @@ VPD = 0.5 * met.calc_vapor_pressure(TAIR)  # mb
 # For bare soil zb is commonly taken as 0.01 m (see Van Bavel and Hillel 1976)
 Z0_SOIL = 0.01
 
-CIMIS_DATA = pd.read_csv(CIMIS_FILE_PATH)
-CIMIS_DATA['Date'] = pd.to_datetime(CIMIS_DATA['Date'], format="%m/%d/%Y")
-CIMIS_DATA["VPD_mean"] = TSEB.met.calc_vapor_pressure(CIMIS_DATA["Avg Air Temp (C)"] + 273.15) \
-                            - 10 * CIMIS_DATA["Avg Vap Pres (kPa)"]
+METEO_DAILY_DATA = pd.read_csv(METEO_DAILY_FILE_PATH, na_values=-9999)
+METEO_DAILY_DATA['DATE'] = pd.to_datetime(METEO_DAILY_DATA['TIMESTAMP'],
+                                          format="%Y%m%d").dt.date
+METEO_DAILY_DATA['DOY'] = pd.to_datetime(METEO_DAILY_DATA['TIMESTAMP'],
+                                         format="%Y%m%d").dt.day_of_year
+METEO_DAILY_DATA = METEO_DAILY_DATA[
+    ["DATE", "DOY", "TA_F", "VPD_F", "SW_IN_F", "LW_IN_F", "SW_OUT",
+     "LW_OUT", "NETRAD", "WS_F", "PA_F", "LE_F_MDS", "H_F_MDS",
+     "G_F_MDS"]]
 
+METEO_DAILY_DATA["TA_F"] = METEO_DAILY_DATA["TA_F"] + 273.15
+# Convert pressure units to mb
+METEO_DAILY_DATA["ES"] = met.calc_vapor_pressure(METEO_DAILY_DATA["TA_F"].values)
+METEO_DAILY_DATA["EA"] = METEO_DAILY_DATA["ES"].values - METEO_DAILY_DATA["VPD_F"].values
+METEO_DAILY_DATA["PA_F"] = 10 * METEO_DAILY_DATA["PA_F"].values
+METEO_DAILY_DATA["LE"] = METEO_DAILY_DATA['NETRAD'] - METEO_DAILY_DATA['G_F_MDS'] \
+                         - METEO_DAILY_DATA['H_F_MDS']
+METEO_DAILY_DATA["ET"] = met.flux_2_evaporation(METEO_DAILY_DATA["LE"],
+                                                METEO_DAILY_DATA["TA_F"],
+                                                24)
+f_cd = pet.calc_cloudiness(METEO_DAILY_DATA["SW_IN_F"], LAT_CND, ELEV_CND, METEO_DAILY_DATA["DOY"])
+
+METEO_DAILY_DATA["LE_ref"] = pet.pet_fao56(METEO_DAILY_DATA["TA_F"],
+                                           METEO_DAILY_DATA["WS_F"],
+                                           METEO_DAILY_DATA["EA"],
+                                           METEO_DAILY_DATA["ES"],
+                                           METEO_DAILY_DATA["PA_F"],
+                                           METEO_DAILY_DATA["SW_IN_F"],
+                                           Z_T,
+                                           Z_U,
+                                           f_cd=f_cd,
+                                           is_daily=True)
+
+METEO_DAILY_DATA["ET_ref"] = met.flux_2_evaporation(METEO_DAILY_DATA["LE_ref"],
+                                                    METEO_DAILY_DATA["TA_F"],
+                                                    24)
 w_lai = w.FloatSlider(value=LAI_REF, min=0, max=10, step=0.1, description='LAI (m²/m²)',
                       **slide_kwargs)
 
@@ -493,21 +531,19 @@ def build_day(doys, lai_range):
 
 
 def crop_coefficients(g_st=GST_REF, r_ss=2000, h_c=H_C_REF, lai_range=(0, 5)):
-    lais = build_day(CIMIS_DATA["Jul"], lai_range)
-    sn = CIMIS_DATA["Sol Rad (W/sq.m)"].values * (1. - 0.23)
+    lais = build_day(METEO_DAILY_DATA["DOY"], lai_range)
+    sn = METEO_DAILY_DATA["SW_IN_F"].values * (1. - 0.23)
     sn_s = sn * np.exp(-0.5 * lais)
     sn_c = sn - sn_s
-    tair = CIMIS_DATA["Avg Air Temp (C)"].values + 273.15
-    r_st = 1. / (TSEB.res.molm2s1_2_ms1(tair, PRESS) * g_st)
-    ea = 10 * CIMIS_DATA["Avg Vap Pres (kPa)"].values
-    ldn = rad.calc_emiss_atm(ea, tair) * met.calc_stephan_boltzmann(tair)
+    r_st = 1. / (TSEB.res.molm2s1_2_ms1(METEO_DAILY_DATA["TA_F"].values, METEO_DAILY_DATA["PA_F"].values) * g_st)
+    ldn = rad.calc_emiss_atm(METEO_DAILY_DATA["EA"].values, METEO_DAILY_DATA["TA_F"].values) * met.calc_stephan_boltzmann(METEO_DAILY_DATA["TA_F"].values)
     z_0m, d_0 = calc_roughness(np.full_like(sn, h_c))
 
     [_, t_s, t_c, _, _, _, le, _, le_c, *_] = pet.shuttleworth_wallace(
-        tair,
-        CIMIS_DATA["Avg Wind Speed (m/s)"].values,
-        ea,
-        PRESS,
+        METEO_DAILY_DATA["TA_F"].values,
+        METEO_DAILY_DATA["WS_F"].values,
+        METEO_DAILY_DATA["EA"].values,
+        METEO_DAILY_DATA["PA_F"].values,
         sn_c,
         sn_s,
         ldn,
@@ -528,14 +564,14 @@ def crop_coefficients(g_st=GST_REF, r_ss=2000, h_c=H_C_REF, lai_range=(0, 5)):
         leaf_type=1,
         verbose=False)
 
-    et = met.flux_2_evaporation(le, t_k=TAIR, time_domain=24)
-    kcs_sw = et / CIMIS_DATA["ETo (mm)"].values
+    et = met.flux_2_evaporation(le, t_k=METEO_DAILY_DATA["TA_F"].values, time_domain=24)
+    kcs_sw = et / METEO_DAILY_DATA["ET_ref"].values
     out_file = os.path.join(OUTPUT_FOLDER, "lai_vs_kc.csv")
     if not os.path.isdir(OUTPUT_FOLDER):
         os.makedirs(OUTPUT_FOLDER)
     result = pd.DataFrame({"LAI": lais, "Kc": kcs_sw})
     result.to_csv(out_file, index=False)
-    plot_kcs(CIMIS_DATA["Date"], lais, CIMIS_DATA["ETo (mm)"],
+    plot_kcs(METEO_DAILY_DATA["DATE"], lais, METEO_DAILY_DATA["ET_ref"],
              et, kcs_sw)
 
 
